@@ -1,0 +1,12 @@
+[project]
+name = "gp-coding-plugin"
+version = "0.1.0"
+description = "Antigravity coding companion plugin bundling engineering standards and clean code review."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+]

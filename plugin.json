@@ -1,0 +1,8 @@
+{
+  "name": "gp-coding-plugin",
+  "version": "0.1.0",
+  "description": "Antigravity coding companion plugin bundling engineering standards and clean code review skills.",
+  "scripts": {
+    "post_install": "scripts/post_install.sh"
+  }
+}

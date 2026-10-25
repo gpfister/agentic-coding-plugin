@@ -1,0 +1,23 @@
+# OS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Antigravity local overrides
+*.local.json
+
+# Git worktrees for parallel sessions
+.worktrees/
+worktrees/
+.pytest_cache/
+
+# Logs
+log/
+*.log
