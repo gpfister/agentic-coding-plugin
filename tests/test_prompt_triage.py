@@ -137,14 +137,30 @@ def test_triage_stage3_response3_task_monitoring_request():
     assert "monitoring" in msg
 
 
-def test_triage_stage3_response4_mixed_request():
-    """Response 4: mix of inquiries, coding requests and/or task monitoring -> reject prompt."""
+def test_triage_stage3_response4_issue_investigation_request():
+    """Response 4: one or more issue investigation request -> invoke coding-investigate using invoke_subagent."""
+    engine = LayaTriageEngine(use_router=False)
+    result = engine.triage("Please investigate why the checkout endpoint returns 500 error", invocation_num=0)
+    assert result.response_choice == "response 4"
+    assert result.intent == "investigation"
+    assert result.response_confidence >= CONFIDENCE_THRESHOLD
+    assert len(result.inject_steps) > 0
+    assert "systemMessage" in result.inject_steps[0]
+    msg = result.inject_steps[0]["systemMessage"]["systemMessage"]
+    assert "=== Prompt Triage Telemetry & Metadata ===" in msg
+    assert "What is this prompt about ?" in msg
+    assert "invoke_subagent" in msg
+    assert "coding-investigate" in msg
+
+
+def test_triage_stage3_response5_mixed_request():
+    """Response 5: mix of inquiries, coding requests, task monitoring and/or investigation -> reject prompt."""
     engine = LayaTriageEngine(use_router=False)
     result = engine.triage(
         "Explain how the server starts and also implement a new fix and monitor the logs",
         invocation_num=0,
     )
-    assert result.response_choice == "response 4"
+    assert result.response_choice == "response 5"
     assert result.intent == "mixed"
     assert result.response_confidence >= CONFIDENCE_THRESHOLD
     assert len(result.inject_steps) > 0
@@ -170,7 +186,9 @@ def test_triage_stage3_ambiguous_low_confidence_triggers_ask_question():
     assert "one or more inquiries involving no changes" in inject_str
     assert "one or more code change request" in inject_str
     assert "one or more task monitoring request" in inject_str
-    assert "a mix of inquiries, code change requests and/or task monitoring request" in inject_str
+    assert "one or more issue investigation request" in inject_str
+    assert "a mix of inquiries, code change requests, task monitoring and/or issue investigation request" in inject_str
+    assert "coding-investigate" in inject_str
     assert "invoke_subagent" in inject_str
 
 
@@ -180,10 +198,17 @@ def test_triage_stage3_real_laya_router_prediction():
     if engine._router is None:
         pytest.skip("Laya Router not available in this environment")
 
-    choice, conf, probs = engine.evaluate_system1_triage("Implement a REST API endpoint for user registration")
-    assert choice == "response 2"
-    assert conf >= CONFIDENCE_THRESHOLD
-    assert "response 2" in probs
+    # Coding request
+    choice2, conf2, probs2 = engine.evaluate_system1_triage("Implement a REST API endpoint for user registration")
+    assert choice2 == "response 2"
+    assert conf2 >= CONFIDENCE_THRESHOLD
+    assert "response 2" in probs2
+
+    # Issue investigation request
+    choice4, conf4, probs4 = engine.evaluate_system1_triage("Please investigate why the database connection drops unexpectedly")
+    assert choice4 == "response 4"
+    assert conf4 >= CONFIDENCE_THRESHOLD
+    assert "response 4" in probs4
 
 
 def test_triage_hook_script_cli(tmp_path: Path):

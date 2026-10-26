@@ -6,13 +6,15 @@ Asks: "What is this prompt about ?" with:
 - response 1: one or more inquiries involving no changes
 - response 2: one or more code change request
 - response 3: one or more task monitoring request
-- response 4: a mix of inquiries, code change requests and/or task monitoring request
+- response 4: one or more issue investigation request
+- response 5: a mix of inquiries, code change requests, task monitoring and/or issue investigation request
 
 If one response has confidence >= 0.4, directly triggers the corresponding triage action:
 - response 1: main agent responds directly to prompt (no changes directive)
 - response 2: main agent invokes coding subagent using invoke_subagent
 - response 3: main agent invokes monitoring subagent using invoke_subagent
-- response 4: main agent rejects prompt (cannot process mixed requests)
+- response 4: main agent invokes coding-investigate subagent using invoke_subagent
+- response 5: main agent rejects prompt (cannot process mixed requests)
 
 Otherwise (confidence < 0.4), instructs the main agent to ask the user via ask_question.
 All triage instructions and Laya Router question metadata are passed via systemMessage.
@@ -44,21 +46,24 @@ TRIAGE_RESPONSES = {
     "response 1": "one or more inquiries involving no changes",
     "response 2": "one or more code change request",
     "response 3": "one or more task monitoring request",
-    "response 4": "a mix of inquiries, code change requests and/or task monitoring request",
+    "response 4": "one or more issue investigation request",
+    "response 5": "a mix of inquiries, code change requests, task monitoring and/or issue investigation request",
 }
 
 RESPONSE_TO_INTENT = {
     "response 1": "question",
     "response 2": "coding",
     "response 3": "monitoring",
-    "response 4": "mixed",
+    "response 4": "investigation",
+    "response 5": "mixed",
 }
 
 INTENT_TO_RESPONSE = {
     "question": "response 1",
     "coding": "response 2",
     "monitoring": "response 3",
-    "mixed": "response 4",
+    "investigation": "response 4",
+    "mixed": "response 5",
 }
 
 
@@ -99,7 +104,7 @@ class HookContext:
     """Context state passed to lifecycle hooks."""
 
     def __init__(self, initial_state: Optional[dict[str, Any]] = None):
-        self._state: dict[str, Any] = dict(initial_state) if initial_state else {}
+        self._state: dict[str, Any] = dict(initial_state) if initial_state else {}\
 
     def get_state(self, key: str, default: Any = None) -> Any:
         return self._state.get(key, default)
@@ -118,7 +123,7 @@ class TriageResult(BaseModel):
     scope_confidence: float = Field(default=1.0, description="Confidence of scope determination")
     response_choice: Optional[str] = Field(
         default=None,
-        description="Selected response: response 1, response 2, response 3, or response 4",
+        description="Selected response: response 1, response 2, response 3, response 4, or response 5",
     )
     response_confidence: float = Field(default=1.0, description="Confidence of selected response")
     response_probabilities: Dict[str, float] = Field(
@@ -129,7 +134,7 @@ class TriageResult(BaseModel):
         default=False,
         description="True if confidence < 0.40 requiring ask_question user selection",
     )
-    intent: Optional[str] = Field(default=None, description="Semantic intent: question, coding, monitoring, or mixed")
+    intent: Optional[str] = Field(default=None, description="Semantic intent: question, coding, monitoring, investigation, or mixed")
     intent_confidence: float = Field(default=1.0, description="Confidence of intent classification")
     inject_steps: List[Dict[str, Any]] = Field(default_factory=list, description="Antigravity injectSteps payload")
 
@@ -164,7 +169,8 @@ class LayaTriageEngine:
         - response 1: one or more inquiries involving no changes
         - response 2: one or more code change request
         - response 3: one or more task monitoring request
-        - response 4: a mix of inquiries, code change requests and/or task monitoring request
+        - response 4: one or more issue investigation request
+        - response 5: a mix of inquiries, code change requests, task monitoring and/or issue investigation request
 
         Returns (choice, confidence, probabilities).
         """
@@ -194,6 +200,17 @@ class LayaTriageEngine:
             w in prompt_lower
             for w in ["monitor", "watch log", "watch serial", "tail -f", "serial console", "log stream", "@monitoring"]
         )
+        # Check investigation keywords
+        has_investigation = any(
+            w in prompt_lower
+            for w in [
+                "investigate", "investigation", "investigating", "invetigate", "invetigation",
+                "diagnose", "root cause", "find the cause", "find cause", "troubleshoot",
+                "coding-investigate", "coding-investigator", "coding-invetigator",
+                "@coding-investigate", "@coding-investigator", "@coding-invetigator",
+                "track down the bug", "track down the issue", "track down the root cause"
+            ]
+        )
         # Check coding keywords
         has_coding = any(
             w in prompt_lower
@@ -205,46 +222,64 @@ class LayaTriageEngine:
             for w in ["how", "what", "why", "explain", "review", "inquiry", "is there", "can you tell", "describe", "where"]
         )
 
+        if has_investigation and not has_monitoring and not any(w in prompt_lower for w in ["implement", "create feature", "deploy", "merge"]):
+            # Questions clarifying or investigating an issue (e.g. "investigate why X fails") are pure investigation
+            has_inquiry = False
+
         # Check for mixed prompt
-        mixed_count = sum([bool(has_monitoring), bool(has_coding), bool(has_inquiry)])
+        mixed_count = sum([bool(has_monitoring), bool(has_coding), bool(has_inquiry), bool(has_investigation)])
         if mixed_count >= 2:
-            return "response 4", 0.90, {
-                "response 1": 0.05,
-                "response 2": 0.05,
-                "response 3": 0.05,
-                "response 4": 0.90,
+            return "response 5", 0.90, {
+                "response 1": 0.02,
+                "response 2": 0.03,
+                "response 3": 0.03,
+                "response 4": 0.02,
+                "response 5": 0.90,
+            }
+
+        if has_investigation:
+            return "response 4", 0.92, {
+                "response 1": 0.02,
+                "response 2": 0.02,
+                "response 3": 0.02,
+                "response 4": 0.92,
+                "response 5": 0.02,
             }
 
         if has_monitoring:
             return "response 3", 0.92, {
-                "response 1": 0.03,
-                "response 2": 0.03,
+                "response 1": 0.02,
+                "response 2": 0.02,
                 "response 3": 0.92,
                 "response 4": 0.02,
+                "response 5": 0.02,
             }
 
         if has_coding:
             return "response 2", 0.90, {
-                "response 1": 0.04,
+                "response 1": 0.03,
                 "response 2": 0.90,
-                "response 3": 0.04,
+                "response 3": 0.03,
                 "response 4": 0.02,
+                "response 5": 0.02,
             }
 
         if has_inquiry:
             return "response 1", 0.88, {
                 "response 1": 0.88,
-                "response 2": 0.05,
-                "response 3": 0.04,
+                "response 2": 0.04,
+                "response 3": 0.03,
                 "response 4": 0.03,
+                "response 5": 0.02,
             }
 
         # Ambiguous / default fallback -> low confidence (< 0.40) to present choice to user
         return "response 1", 0.30, {
             "response 1": 0.30,
-            "response 2": 0.25,
-            "response 3": 0.25,
-            "response 4": 0.20,
+            "response 2": 0.20,
+            "response 3": 0.20,
+            "response 4": 0.15,
+            "response 5": 0.15,
         }
 
     def triage(
@@ -261,13 +296,13 @@ class LayaTriageEngine:
         metadata_lines = [
             "=== Prompt Triage Telemetry & Metadata ===",
             f'- Question: "{TRIAGE_QUESTION}"',
-            f'- Selected Response: {choice} ("{TRIAGE_RESPONSES.get(choice, "")}")',
+            f'- Selected Response: {choice} (\"{TRIAGE_RESPONSES.get(choice, "")}\")',
             f"- Confidence: {conf:.4f}",
             "- Probability Distribution:",
         ]
         for r_key, r_desc in TRIAGE_RESPONSES.items():
             prob_val = probs.get(r_key, 0.0)
-            metadata_lines.append(f'  * {r_key} ("{r_desc}"): {prob_val:.4f}')
+            metadata_lines.append(f'  * {r_key} (\"{r_desc}\"): {prob_val:.4f}')
 
         if metadata:
             metadata_lines.append("- Context Metadata:")
@@ -286,6 +321,7 @@ class LayaTriageEngine:
                 TRIAGE_RESPONSES["response 2"],
                 TRIAGE_RESPONSES["response 3"],
                 TRIAGE_RESPONSES["response 4"],
+                TRIAGE_RESPONSES["response 5"],
             ]
             ask_guidance = (
                 f"{metadata_text}\n\n"
@@ -296,12 +332,14 @@ class LayaTriageEngine:
                 f'  1. "{options[0]}"\n'
                 f'  2. "{options[1]}"\n'
                 f'  3. "{options[2]}"\n'
-                f'  4. "{options[3]}"\n\n'
+                f'  4. "{options[3]}"\n'
+                f'  5. "{options[4]}"\n\n'
                 "Execution rules based on user selection:\n"
                 "- If response 1 ('one or more inquiries involving no changes') is selected: the main agent will respond to the prompt directly with no code changes.\n"
                 "- If response 2 ('one or more code change request') is selected: the main agent will invoke the coding subagent using invoke_subagent(TypeName='coding', Role='Coding Workflow Orchestrator', Prompt=...).\n"
                 "- If response 3 ('one or more task monitoring request') is selected: the main agent will invoke the monitoring subagent using invoke_subagent(TypeName='monitoring', Role='Telemetry Monitor', Prompt=...).\n"
-                "- If response 4 ('a mix of inquiries, code change requests and/or task monitoring request') is selected: the main agent will reject the prompt responding that it cannot process a mix of inquiries, coding requests and/or monitoring tasks."
+                "- If response 4 ('one or more issue investigation request') is selected: the main agent will invoke the coding-investigate subagent using invoke_subagent(TypeName='coding-investigate', Role='Issue Investigator', Prompt=...).\n"
+                "- If response 5 ('a mix of inquiries, code change requests, task monitoring and/or issue investigation request') is selected: the main agent will reject the prompt responding that it cannot process a mix of inquiries, coding requests, monitoring tasks, and/or investigation tasks."
             )
             inject_steps.append({
                 "systemMessage": {
@@ -340,11 +378,18 @@ class LayaTriageEngine:
                 "invoke_subagent(TypeName='monitoring', Role='Telemetry Monitor', Prompt=...). "
                 "Do not perform monitoring directly in the main agent turn."
             )
-        else:  # response 4
+        elif choice == "response 4":
             directive = (
-                "Prompt Triage Directive: Response 4 identified (mix of inquiries, code change requests and/or task monitoring requests). "
-                "You must reject the prompt, responding to the user that you cannot process a mix of inquiries, coding requests and/or monitoring tasks. "
-                "Ask the user to separate their requests into individual inquiries, coding tasks, or monitoring tasks."
+                "Prompt Triage Directive: Response 4 identified (issue investigation request). "
+                "You must invoke the coding-investigate subagent (@coding-investigate) using invoke_subagent:\n"
+                "invoke_subagent(TypeName='coding-investigate', Role='Issue Investigator', Prompt=...). "
+                "Do not perform investigation directly in the main agent turn."
+            )
+        else:  # response 5
+            directive = (
+                "Prompt Triage Directive: Response 5 identified (mix of inquiries, code change requests, task monitoring and/or issue investigation requests). "
+                "You must reject the prompt, responding to the user that you cannot process a mix of inquiries, coding requests, monitoring tasks, and/or investigation tasks. "
+                "Ask the user to separate their requests into individual inquiries, coding tasks, monitoring tasks, or investigation tasks."
             )
 
         full_message = f"{metadata_text}\n\n{directive}"

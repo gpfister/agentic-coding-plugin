@@ -25,6 +25,7 @@ def test_discover_agents():
         "coding",
         "coding-clarify",
         "coding-develop",
+        "coding-investigate",
         "coding-merge",
         "coding-monitoring",
         "coding-plan",
@@ -35,6 +36,8 @@ def test_discover_agents():
     for expected in expected_agents:
         assert expected in agent_names, f"Expected agent '{expected}' to be discovered in agents/"
     assert "coding-orchestrator" not in agent_names, "coding-orchestrator should be merged into coding"
+    assert "coding-invetigator" not in agent_names, "coding-invetigator typo should be eliminated"
+    assert "coding-investigator" not in agent_names, "coding-investigator should be merged into coding-investigate"
 
 
 def test_parse_frontmatter():
@@ -43,6 +46,12 @@ def test_parse_frontmatter():
     meta = parse_agent_frontmatter(coding_md)
     assert meta.get("name") == "coding"
     assert "orchestrator" in meta.get("description", "").lower()
+
+    investigator_md = PLUGIN_ROOT / "agents" / "coding-investigate.md"
+    assert investigator_md.exists()
+    meta_inv = parse_agent_frontmatter(investigator_md)
+    assert meta_inv.get("name") == "coding-investigate"
+    assert "investigation" in meta_inv.get("description", "").lower()
 
 
 def test_define_agent():
@@ -65,6 +74,7 @@ def test_register_agents_uses_define_agent():
     reg_names = [r["name"] for r in registered]
     assert "coding" in reg_names
     assert "monitoring" in reg_names
+    assert "coding-investigate" in reg_names
 
     coding = next(r for r in registered if r["name"] == "coding")
     assert coding["enable_subagent_tools"] is True
@@ -74,6 +84,12 @@ def test_register_agents_uses_define_agent():
     monitoring = next(r for r in registered if r["name"] == "monitoring")
     assert monitoring["enable_write_tools"] is True
     assert "monitoring" in monitoring["system_prompt"].lower()
+
+    # Standalone issue investigator requires write tools (for issue assessment) and subagent tools (to invoke coding orchestrator)
+    inv = next(r for r in registered if r["name"] == "coding-investigate")
+    assert inv["enable_write_tools"] is True
+    assert inv["enable_subagent_tools"] is True
+    assert "Issue Investigator" in inv["system_prompt"]
 
     # Subagents coding-specify and coding-plan must have write tools enabled to author artifacts
     specify = next(r for r in registered if r["name"] == "coding-specify")
@@ -89,11 +105,13 @@ def test_build_session_guidance():
     guidance = build_session_guidance(agents, registered)
     assert "@coding" in guidance
     assert "@monitoring" in guidance
+    assert "@coding-investigate" in guidance
     assert "define_agent" in guidance or "define_subagent" in guidance
     assert "invoke_subagent" in guidance
     assert "coding-clarify" in guidance
     assert "specification.md" in guidance
     assert "plan.md" in guidance
+    assert "issue-assessment.md" in guidance
     assert "RequestFeedback" in guidance
     assert "sole and final tool call" in guidance
     assert "[Approved]" in guidance
@@ -120,5 +138,6 @@ def test_register_subagents_cli():
     assert "define_agent" in sys_msg or "define_subagent" in sys_msg
     assert "@coding" in sys_msg
     assert "@monitoring" in sys_msg
+    assert "@coding-investigate" in sys_msg
     assert "RequestFeedback" in sys_msg
     assert "sole and final tool call" in sys_msg
