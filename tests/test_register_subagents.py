@@ -75,6 +75,13 @@ def test_register_agents_uses_define_agent():
     assert monitoring["enable_write_tools"] is True
     assert "monitoring" in monitoring["system_prompt"].lower()
 
+    # Subagents coding-specify and coding-plan must have write tools enabled to author artifacts
+    specify = next(r for r in registered if r["name"] == "coding-specify")
+    assert specify["enable_write_tools"] is True
+
+    plan = next(r for r in registered if r["name"] == "coding-plan")
+    assert plan["enable_write_tools"] is True
+
 
 def test_build_session_guidance():
     agents = discover_agents()
@@ -85,6 +92,12 @@ def test_build_session_guidance():
     assert "define_agent" in guidance or "define_subagent" in guidance
     assert "invoke_subagent" in guidance
     assert "coding-clarify" in guidance
+    assert "specification.md" in guidance
+    assert "plan.md" in guidance
+    assert "RequestFeedback" in guidance
+    assert "sole and final tool call" in guidance
+    assert "[Approved]" in guidance
+    assert "[Rejected]" in guidance
 
 
 def test_register_subagents_cli():
@@ -107,3 +120,5 @@ def test_register_subagents_cli():
     assert "define_agent" in sys_msg or "define_subagent" in sys_msg
     assert "@coding" in sys_msg
     assert "@monitoring" in sys_msg
+    assert "RequestFeedback" in sys_msg
+    assert "sole and final tool call" in sys_msg

@@ -2,7 +2,8 @@
 """SessionStart Hook: Registers subagents and injects orchestration guidance.
 
 Reads agent specifications from gp-coding-plugin/agents/*.md and uses define_agent
-to register @coding and @monitoring agents, injecting session startup guidance into Antigravity.
+to register all pipeline and monitoring agents, injecting session startup guidance,
+permissions, and Antigravity interactive artifact approval (Approve/Reject) protocols into Antigravity.
 """
 
 from __future__ import annotations
@@ -57,48 +58,33 @@ define_subagent = define_agent
 
 
 def register_agents() -> list[dict[str, Any]]:
-    """Register coding and monitoring agents using define_agent."""
+    """Register coding, monitoring, and pipeline worker agents using define_agent."""
     registered: list[dict[str, Any]] = []
+    if not AGENTS_DIR.exists():
+        return registered
 
-    # Register coding agent
-    coding_md = AGENTS_DIR / "coding.md"
-    if coding_md.exists():
-        content = coding_md.read_text(encoding="utf-8")
-        meta = parse_agent_frontmatter(coding_md)
+    for md_file in sorted(AGENTS_DIR.glob("*.md")):
+        meta = parse_agent_frontmatter(md_file)
+        name = meta.get("name", md_file.stem)
+        desc = meta.get("description", "")
+        content = md_file.read_text(encoding="utf-8")
         body = re.sub(r"^---\s*\n.*?\n---\s*\n?", "", content, flags=re.DOTALL).strip()
-        coding_agent = define_agent(
-            name="coding",
-            description=meta.get(
-                "description",
-                "Coding Workflow Orchestrator coordinating the 6-stage software development lifecycle.",
-            ),
+
+        is_orchestrator = (name == "coding")
+        # Workers need write tools to create artifacts (coding-specify, coding-plan)
+        # or implement and review code across repositories (coding-develop, coding-merge, coding-review)
+        enable_write = True
+        enable_subagents = is_orchestrator
+
+        agent_spec = define_agent(
+            name=name,
+            description=desc,
             system_prompt=body,
-            enable_write_tools=True,
-            enable_subagent_tools=True,
+            enable_write_tools=enable_write,
+            enable_subagent_tools=enable_subagents,
             enable_mcp_tools=True,
         )
-        registered.append(coding_agent)
-
-    # Register monitoring agent
-    monitoring_md = AGENTS_DIR / "monitoring.md"
-    if not monitoring_md.exists():
-        monitoring_md = AGENTS_DIR / "coding-monitoring.md"
-    if monitoring_md.exists():
-        content = monitoring_md.read_text(encoding="utf-8")
-        meta = parse_agent_frontmatter(monitoring_md)
-        body = re.sub(r"^---\s*\n.*?\n---\s*\n?", "", content, flags=re.DOTALL).strip()
-        monitoring_agent = define_agent(
-            name="monitoring",
-            description=meta.get(
-                "description",
-                "Telemetry and stream surveillance worker watching logs, serial consoles, and container streams with anomaly pause gates.",
-            ),
-            system_prompt=body,
-            enable_write_tools=True,
-            enable_subagent_tools=False,
-            enable_mcp_tools=True,
-        )
-        registered.append(monitoring_agent)
+        registered.append(agent_spec)
 
     return registered
 
@@ -143,14 +129,25 @@ def build_session_guidance(
     lines.extend([
         "",
         "Subagent Registration & Orchestration Protocol:",
-        "1. **Agent Registration**: The main agent must register `@coding` and `@monitoring` using `define_subagent` (or `define_agent`) before invocation if not already active.",
-        "   - `@coding`: Coordinates the 6-stage lifecycle (`coding-clarify` -> `coding-specify` -> `coding-plan` -> `coding-develop` -> `coding-review` -> `coding-merge`).",
-        "   - `@monitoring`: Telemetry monitor for continuous log / serial stream surveillance.",
-        "2. **Spawning Subagents**: Use `invoke_subagent` to spawn `@coding` (TypeName='coding') or `@monitoring` (TypeName='monitoring').",
-        "3. **Sequential Phase Handoffs**: When a subagent completes its task, the orchestrator/agent invokes the next stage's subagent using `invoke_subagent`.",
-        "   - Workflow: `coding-clarify` -> `coding-specify` -> `coding-plan` -> `coding-develop` -> `coding-review` -> `coding-merge`.",
-        "4. **Background Awaiting & Resumption**: When subagents await user input (`coding-specify` awaiting spec approval, `coding-plan` awaiting plan approval, `coding-review` awaiting merge approval), forward user feedback to the subagent using `send_message`.",
-        "5. **Informational Questions**: When prompt triage flags an inquiry involving no changes, answer directly without making code modifications ('Do not make any changes').",
+        "1. **Agent Registration & Permissions**:",
+        "   - The main agent must register `@coding` and worker subagents using `define_subagent` (or `define_agent`) before spawning them to grant required tool privileges.",
+        "   - `@coding`: Orchestrator requiring `enable_write_tools=True` and `enable_subagent_tools=True`.",
+        "   - Worker Subagents (`@coding-specify`, `@coding-plan`, `@coding-develop`, `@coding-review`, `@coding-merge`, `@monitoring`): Require `enable_write_tools=True` so they can author artifacts, edit code, and manage branches directly.",
+        "2. **Spawning Subagents**: Use `invoke_subagent` to spawn `@coding` (TypeName='coding') or worker subagents (e.g. TypeName='coding-specify', 'coding-plan', etc.).",
+        "3. **Sequential Phase Handoffs**: Coordinate the 6-stage lifecycle:",
+        "   - `coding-clarify` -> `coding-specify` -> `coding-plan` -> `coding-develop` (parallel per repo) -> `coding-review` -> `coding-merge`.",
+        "4. **Antigravity Interactive Artifact Approval Protocol (Approve / Reject UI)**:",
+        "   - **Mandatory Approval Gates**: Both `specification.md` (Stage 2) and `plan.md` (Stage 3) require user approval via Antigravity's interactive modal before proceeding to subsequent stages.",
+        "   - **Artifact Location**: Write the artifact directly to the session artifact directory: `<appDataDir>/brain/<conversation-id>/<artifact_name>.md` (e.g. `specification.md` or `plan.md`).",
+        "   - **Artifact Metadata**: You MUST provide `ArtifactMetadata` with `RequestFeedback=True` and `UserFacing=True` (e.g. `write_file(Path=..., Content=..., Overwrite=True, ArtifactMetadata={\"RequestFeedback\": True, \"UserFacing\": True})`).",
+        "   - **Turn Termination & Sole Tool Call Rule (CRITICAL)**: To trigger the interactive Approve / Reject modal in the Antigravity UI, `write_file(..., RequestFeedback=True)` MUST be the **sole and final tool call of that turn**.",
+        "     * DO NOT batch secondary tool calls (such as updating session notes in Obsidian, running shell commands, or sending messages) in the same turn or after the artifact creation. Any secondary updates must be executed *before* calling `write_file(RequestFeedback=true)`, or deferred until *after* the user provides feedback.",
+        "     * Immediately stop calling tools after creating the artifact to end your turn so Antigravity presents the interactive review buttons to the user.",
+        "   - **Handling User Decisions**: When the user clicks the UI button, Antigravity injects:",
+        "     * `[Approved] <artifact>.md`: Proceed immediately to the next stage (`coding-plan` after `specification.md`, or `coding-develop` workers after `plan.md`).",
+        "     * `[Rejected] <artifact>.md` (with optional feedback comments): Route feedback back to `coding-clarify` to adjust scope and re-synthesize.",
+        "5. **Background Awaiting & Resumption**: When subagents are running asynchronously or awaiting user feedback, do not poll in a loop; Antigravity automatically wakes up the orchestrator when updates or user inputs arrive. Forward user feedback to the subagent using `send_message`.",
+        "6. **Informational Questions**: When prompt triage flags an inquiry involving no changes, answer directly without making code modifications ('Do not make any changes').",
     ])
     return "\n".join(lines)
 
