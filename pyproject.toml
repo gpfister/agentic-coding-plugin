@@ -4,7 +4,11 @@ version = "0.1.0"
 description = "Antigravity coding companion plugin bundling engineering standards and clean code review."
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "google-antigravity>=0.1.22",
+    "laya>=0.4.15",
+    "pydantic>=2.10.0",
+]
 
 [dependency-groups]
 dev = [
