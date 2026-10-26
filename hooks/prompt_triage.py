@@ -8,13 +8,13 @@ Asks: "What is this prompt about ?" with:
 - response 3: one or more task monitoring request
 - response 4: a mix of inquiries, code change requests and/or task monitoring request
 
-If one response has confidence >= 0.8, directly triggers the corresponding triage action:
+If one response has confidence >= 0.4, directly triggers the corresponding triage action:
 - response 1: main agent responds directly to prompt (no changes directive)
 - response 2: main agent invokes coding subagent using invoke_subagent
 - response 3: main agent invokes monitoring subagent using invoke_subagent
 - response 4: main agent rejects prompt (cannot process mixed requests)
 
-Otherwise (confidence < 0.8), instructs the main agent to ask the user via ask_question.
+Otherwise (confidence < 0.4), instructs the main agent to ask the user via ask_question.
 All triage instructions and Laya Router question metadata are passed via systemMessage.
 """
 
@@ -37,6 +37,8 @@ warnings.filterwarnings("ignore")
 
 logger = logging.getLogger(__name__)
 
+CONFIDENCE_THRESHOLD = 0.40
+
 TRIAGE_QUESTION = "What is this prompt about ?"
 TRIAGE_RESPONSES = {
     "response 1": "one or more inquiries involving no changes",
@@ -58,6 +60,33 @@ INTENT_TO_RESPONSE = {
     "monitoring": "response 3",
     "mixed": "response 4",
 }
+
+
+def clean_user_prompt(text: str) -> str:
+    """Extract and sanitize only the actual user prompt from raw input.
+
+    Strips Antigravity wrapper tags (<USER_REQUEST>, <ADDITIONAL_METADATA>, etc.)
+    and trailing concatenated file paths.
+    """
+    if not isinstance(text, str):
+        text = str(text)
+
+    # 1. If <USER_REQUEST> is present, extract its content (last occurrence)
+    user_requests = re.findall(r"<USER_REQUEST>(.*?)(?:</USER_REQUEST>|$)", text, flags=re.DOTALL)
+    if user_requests:
+        text = user_requests[-1]
+
+    # 2. Strip <ADDITIONAL_METADATA>...</ADDITIONAL_METADATA> and other XML tags
+    text = re.sub(r"<ADDITIONAL_METADATA>.*?(?:</ADDITIONAL_METADATA>|$)", "", text, flags=re.DOTALL)
+    text = re.sub(r"<CONTEXT>.*?(?:</CONTEXT>|$)", "", text, flags=re.DOTALL)
+    text = re.sub(r"<[^>]+>", "", text)
+
+    # 3. Strip trailing concatenated file paths at end of prompt (with or without preceding space)
+    # Matches patterns like /Users/.../file.py or /path/to/file.ext attached at the end
+    text = re.sub(r"((?:\s*|(?<=[a-zA-Z0-9_]))/(?:[a-zA-Z0-9_\.\-]+/)+[a-zA-Z0-9_\.\-]+)+$", "", text)
+
+    # 4. Normalize whitespace
+    return " ".join(text.split()).strip()
 
 
 class HookResult(BaseModel):
@@ -98,7 +127,7 @@ class TriageResult(BaseModel):
     )
     requires_user_confirmation: bool = Field(
         default=False,
-        description="True if confidence < 0.8 requiring ask_question user selection",
+        description="True if confidence < 0.40 requiring ask_question user selection",
     )
     intent: Optional[str] = Field(default=None, description="Semantic intent: question, coding, monitoring, or mixed")
     intent_confidence: float = Field(default=1.0, description="Confidence of intent classification")
@@ -210,18 +239,18 @@ class LayaTriageEngine:
                 "response 4": 0.03,
             }
 
-        # Ambiguous / default fallback -> low confidence (< 0.80) to present choice to user
-        return "response 1", 0.50, {
-            "response 1": 0.50,
+        # Ambiguous / default fallback -> low confidence (< 0.40) to present choice to user
+        return "response 1", 0.30, {
+            "response 1": 0.30,
             "response 2": 0.25,
-            "response 3": 0.15,
-            "response 4": 0.10,
+            "response 3": 0.25,
+            "response 4": 0.20,
         }
 
     def triage(
         self,
         prompt: str,
-        invocation_num: int = 1,
+        invocation_num: int = 0,
         metadata: Optional[dict[str, Any]] = None,
     ) -> TriageResult:
         """Run System 1 prompt triage and format systemMessage with metadata."""
@@ -231,14 +260,14 @@ class LayaTriageEngine:
         # Build metadata text detailing the question and result submitted to Laya Router
         metadata_lines = [
             "=== Prompt Triage Telemetry & Metadata ===",
-            f"- Question: \"{TRIAGE_QUESTION}\"",
-            f"- Selected Response: {choice} (\"{TRIAGE_RESPONSES.get(choice, '')}\")",
+            f'- Question: "{TRIAGE_QUESTION}"',
+            f'- Selected Response: {choice} ("{TRIAGE_RESPONSES.get(choice, "")}")',
             f"- Confidence: {conf:.4f}",
             "- Probability Distribution:",
         ]
         for r_key, r_desc in TRIAGE_RESPONSES.items():
             prob_val = probs.get(r_key, 0.0)
-            metadata_lines.append(f"  * {r_key} (\"{r_desc}\"): {prob_val:.4f}")
+            metadata_lines.append(f'  * {r_key} ("{r_desc}"): {prob_val:.4f}')
 
         if metadata:
             metadata_lines.append("- Context Metadata:")
@@ -250,8 +279,8 @@ class LayaTriageEngine:
 
         inject_steps: list[dict[str, Any]] = []
 
-        if conf < 0.80:
-            # Low confidence: instruct main agent to ask user via ask_question
+        if conf < CONFIDENCE_THRESHOLD:
+            # Low confidence (< 0.40): instruct main agent to ask user via ask_question
             options = [
                 TRIAGE_RESPONSES["response 1"],
                 TRIAGE_RESPONSES["response 2"],
@@ -260,14 +289,14 @@ class LayaTriageEngine:
             ]
             ask_guidance = (
                 f"{metadata_text}\n\n"
-                f"Prompt Triage: Intent classification is ambiguous (confidence {conf:.2f} < 0.80).\n"
+                f"Prompt Triage: Intent classification is ambiguous (confidence {conf:.2f} < {CONFIDENCE_THRESHOLD:.2f}).\n"
                 "You MUST present the choice to the user by submitting the following question using the `ask_question` tool:\n"
-                f"- Question: \"{TRIAGE_QUESTION}\"\n"
+                f'- Question: "{TRIAGE_QUESTION}"\n'
                 "- Options:\n"
-                f"  1. \"{options[0]}\"\n"
-                f"  2. \"{options[1]}\"\n"
-                f"  3. \"{options[2]}\"\n"
-                f"  4. \"{options[3]}\"\n\n"
+                f'  1. "{options[0]}"\n'
+                f'  2. "{options[1]}"\n'
+                f'  3. "{options[2]}"\n'
+                f'  4. "{options[3]}"\n\n'
                 "Execution rules based on user selection:\n"
                 "- If response 1 ('one or more inquiries involving no changes') is selected: the main agent will respond to the prompt directly with no code changes.\n"
                 "- If response 2 ('one or more code change request') is selected: the main agent will invoke the coding subagent using invoke_subagent(TypeName='coding', Role='Coding Workflow Orchestrator', Prompt=...).\n"
@@ -291,7 +320,7 @@ class LayaTriageEngine:
                 inject_steps=inject_steps,
             )
 
-        # High confidence (>= 0.80): directly trigger the corresponding action
+        # High confidence (>= CONFIDENCE_THRESHOLD): directly trigger the corresponding action
         if choice == "response 1":
             directive = (
                 "Prompt Triage Directive: Response 1 identified (inquiries involving no changes). "
@@ -373,11 +402,11 @@ class PromptTriageHook:
         self.engine = LayaTriageEngine(use_router=use_router)
 
     async def run(self, context: HookContext, data: Any) -> HookResult:
-        prompt_text = extract_prompt_text(data).strip()
+        prompt_text = clean_user_prompt(extract_prompt_text(data))
         if not prompt_text:
             return HookResult(allow=True, message="empty prompt")
 
-        inv_num = context.get_state("invocation_num", 1)
+        inv_num = context.get_state("invocation_num", 0)
         conv_id = context.get_state("conversation_id", None)
         artifact_dir = context.get_state("artifact_dir", None)
 
@@ -416,7 +445,7 @@ def on_session_start(fn: Any) -> Any:
 
 async def session_start_triage(context: HookContext) -> None:
     context.set_state("triage_initialized", True)
-    context.set_state("invocation_num", 1)
+    context.set_state("invocation_num", 0)
 
 
 async def prompt_triage_pre_turn(context: HookContext, data: Any) -> HookResult:
@@ -426,8 +455,16 @@ async def prompt_triage_pre_turn(context: HookContext, data: Any) -> HookResult:
 
 async def run_hook_async(payload: dict) -> list[dict]:
     """Execute PromptTriageHook within a HookContext."""
-    prompt = payload.get("lastUserInput", "")
-    if not prompt:
+    # Antigravity PreInvocation fires before every model invocation within a turn
+    # (including after tool calls like ask_question, read_file, etc.).
+    # Only triage the initial user prompt on invocationNum == 0.
+    # Skip triage when invocationNum > 0 to avoid re-firing after tool steps.
+    inv_num = payload.get("invocationNum", 0)
+    if inv_num > 0:
+        return []
+
+    raw_prompt = payload.get("lastUserInput", "")
+    if not raw_prompt:
         transcript_path = payload.get("transcriptPath", "")
         if transcript_path and os.path.exists(transcript_path):
             try:
@@ -436,19 +473,20 @@ async def run_hook_async(payload: dict) -> list[dict]:
                         try:
                             step = json.loads(line)
                             if step.get("type") == "USER_INPUT" or step.get("source") == "USER_EXPLICIT":
-                                prompt = step.get("content", "")
-                                if prompt:
+                                raw_prompt = step.get("content", "")
+                                if raw_prompt:
                                     break
                         except Exception:
                             continue
             except Exception:
                 pass
 
+    prompt = clean_user_prompt(extract_prompt_text(raw_prompt))
     if not prompt:
         return []
 
     context = HookContext()
-    context.set_state("invocation_num", payload.get("invocationNum", 1))
+    context.set_state("invocation_num", inv_num)
     context.set_state("conversation_id", payload.get("conversationId"))
     context.set_state("artifact_dir", payload.get("artifactDirectoryPath"))
 
