@@ -1,4 +1,4 @@
-"""Tests for Laya Router prompt triage engine, Antigravity SDK style hooks, and CLI hook runner."""
+"""Tests for self-contained prompt triage hook and Laya Router System 1 model."""
 
 import asyncio
 import json
@@ -10,16 +10,19 @@ import pytest
 from google.antigravity import types
 from google.antigravity.hooks import HookContext
 
-from gp_coding.hooks import (
+PLUGIN_ROOT = Path(__file__).resolve().parent.parent
+if str(PLUGIN_ROOT) not in sys.path:
+    sys.path.insert(0, str(PLUGIN_ROOT))
+
+from hooks.prompt_triage import (
     PromptTriageHook,
     prompt_triage_pre_turn,
     session_start_triage,
     extract_prompt_text,
+    LayaTriageEngine,
+    TRIAGE_QUESTION,
+    TRIAGE_RESPONSES,
 )
-from gp_coding.state import WorkflowState, WorkflowStatus
-from gp_coding.triage import LayaTriageEngine
-
-PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 
 
 def test_extract_prompt_text():
@@ -37,50 +40,17 @@ def test_sdk_style_prompt_triage_hook_allow():
 
         assert isinstance(result, types.HookResult)
         assert result.allow is True
-        assert result.message == "question"
+        assert result.message in ("response 1", "question")
         assert context.get_state("triage_intent") == "question"
+        assert context.get_state("response_choice") == "response 1"
         inject_steps = context.get_state("inject_steps")
-        assert any("Do not make any changes" in str(step) for step in inject_steps)
-
-    asyncio.run(_run())
-
-
-def test_sdk_style_prompt_triage_hook_deny_out_of_scope():
-    async def _run():
-        context = HookContext()
-        context.set_state("invocation_num", 3)
-
-        hook = PromptTriageHook(use_router=False)
-        result = await hook.run(context, "What is the best recipe for baking bread?")
-
-        assert isinstance(result, types.HookResult)
-        assert result.allow is False
-        assert "out of the scope" in result.message
-
-    asyncio.run(_run())
-
-
-def test_sdk_style_prompt_triage_waiting_agent_routing():
-    async def _run():
-        context = HookContext()
-        context.set_state("invocation_num", 3)
-
-        state = WorkflowState()
-        state.start_workflow("wf-active-test")
-        state.transition_to(
-            status=WorkflowStatus.AWAITING_SPEC_APPROVAL,
-            step="coding-specify",
-            waiting_agent="coding-specify",
-            waiting_conversation_id="conv-spec-555",
-        )
-        context.set_state("conversation_id", "test-conv-ctx")
-
-        hook = PromptTriageHook(use_router=False)
-        result = await hook.run(context, "@coding-specify this spec looks great, approved")
-
-        assert result.allow is True
-        inject_steps = context.get_state("inject_steps")
-        assert any("coding-specify" in str(step) for step in inject_steps)
+        assert len(inject_steps) > 0
+        assert "systemMessage" in inject_steps[0]
+        assert "ephemeralMessage" not in inject_steps[0]
+        sys_msg = inject_steps[0]["systemMessage"]["systemMessage"]
+        assert "What is this prompt about ?" in sys_msg
+        assert "Prompt Triage Directive" in sys_msg
+        assert "Do not make any changes" in sys_msg
 
     asyncio.run(_run())
 
@@ -95,64 +65,104 @@ def test_sdk_style_session_start_hook():
     asyncio.run(_run())
 
 
-def test_triage_stage1_session_start_always_in_scope():
-    engine = LayaTriageEngine(use_router=False)
-    in_scope, conf = engine.evaluate_scope("What should I eat for dinner?", invocation_num=1)
-    assert in_scope is True
-    assert conf == 1.0
-
-
-def test_triage_stage1_out_of_scope_flagged():
-    engine = LayaTriageEngine(use_router=False)
-    in_scope, conf = engine.evaluate_scope("What is the recipe for chocolate cake?", invocation_num=2)
-    assert in_scope is False
-    assert conf >= 0.80
-
-
-def test_triage_stage2_waiting_subagent_routed():
-    engine = LayaTriageEngine(use_router=False)
-    state = WorkflowState()
-    state.start_workflow("wf-active")
-    state.transition_to(
-        status=WorkflowStatus.AWAITING_SPEC_APPROVAL,
-        step="coding-specify",
-        waiting_agent="coding-specify",
-        waiting_conversation_id="conv-spec-999",
-    )
-
-    result = engine.triage("Looks good, approved!", invocation_num=3, state=state)
-    assert result.stage_reached == 2
-    assert result.routed_to_waiting_agent == "coding-specify"
-    assert any("conv-spec-999" in str(step) for step in result.inject_steps)
-
-
-def test_triage_stage3_question_intent():
+def test_triage_stage3_response1_inquiries_no_changes():
+    """Response 1: one or more inquiries involving no changes -> respond directly, no code changes."""
     engine = LayaTriageEngine(use_router=False)
     result = engine.triage("Can you explain how this module works?", invocation_num=2)
-    assert result.stage_reached == 3
+    assert result.response_choice == "response 1"
     assert result.intent == "question"
-    assert any("Do not make any changes" in str(step) for step in result.inject_steps)
+    assert result.response_confidence >= 0.80
+    assert len(result.inject_steps) > 0
+    assert "systemMessage" in result.inject_steps[0]
+    msg = result.inject_steps[0]["systemMessage"]["systemMessage"]
+    assert "=== Prompt Triage Telemetry & Metadata ===" in msg
+    assert "What is this prompt about ?" in msg
+    assert "Do not make any changes" in msg
 
 
-def test_triage_stage3_coding_intent():
+def test_triage_stage3_response2_code_change_request():
+    """Response 2: one or more code change request -> invoke coding subagent using invoke_subagent."""
     engine = LayaTriageEngine(use_router=False)
     result = engine.triage("Please implement a new login endpoint with JWT auth", invocation_num=2)
-    assert result.stage_reached == 3
+    assert result.response_choice == "response 2"
     assert result.intent == "coding"
-    assert any("coding-orchestrator" in str(step) for step in result.inject_steps)
+    assert result.response_confidence >= 0.80
+    assert len(result.inject_steps) > 0
+    assert "systemMessage" in result.inject_steps[0]
+    msg = result.inject_steps[0]["systemMessage"]["systemMessage"]
+    assert "=== Prompt Triage Telemetry & Metadata ===" in msg
+    assert "What is this prompt about ?" in msg
+    assert "invoke_subagent" in msg
+    assert "coding" in msg
 
 
-def test_triage_stage3_monitoring_intent():
+def test_triage_stage3_response3_task_monitoring_request():
+    """Response 3: one or more task monitoring request -> invoke monitoring subagent using invoke_subagent."""
     engine = LayaTriageEngine(use_router=False)
     result = engine.triage("@monitoring watch the serial console /dev/ttyUSB0", invocation_num=2)
-    assert result.stage_reached == 3
+    assert result.response_choice == "response 3"
     assert result.intent == "monitoring"
-    assert any("coding-monitoring" in str(step) for step in result.inject_steps)
+    assert result.response_confidence >= 0.80
+    assert len(result.inject_steps) > 0
+    assert "systemMessage" in result.inject_steps[0]
+    msg = result.inject_steps[0]["systemMessage"]["systemMessage"]
+    assert "=== Prompt Triage Telemetry & Metadata ===" in msg
+    assert "What is this prompt about ?" in msg
+    assert "invoke_subagent" in msg
+    assert "monitoring" in msg
+
+
+def test_triage_stage3_response4_mixed_request():
+    """Response 4: mix of inquiries, coding requests and/or task monitoring -> reject prompt."""
+    engine = LayaTriageEngine(use_router=False)
+    result = engine.triage(
+        "Explain how the server starts and also implement a new fix and monitor the logs",
+        invocation_num=2,
+    )
+    assert result.response_choice == "response 4"
+    assert result.intent == "mixed"
+    assert result.response_confidence >= 0.80
+    assert len(result.inject_steps) > 0
+    assert "systemMessage" in result.inject_steps[0]
+    msg = result.inject_steps[0]["systemMessage"]["systemMessage"]
+    assert "=== Prompt Triage Telemetry & Metadata ===" in msg
+    assert "What is this prompt about ?" in msg
+    assert "cannot process a mix" in msg
+
+
+def test_triage_stage3_ambiguous_low_confidence_triggers_ask_question():
+    """Low confidence (< 0.80): instructs main agent to submit question to user via ask_question."""
+    engine = LayaTriageEngine(use_router=False)
+    result = engine.triage("maybe something about project files", invocation_num=2)
+    assert result.requires_user_confirmation is True
+    assert result.response_confidence < 0.80
+    assert len(result.inject_steps) > 0
+    assert "systemMessage" in result.inject_steps[0]
+    inject_str = str(result.inject_steps[0])
+    assert "=== Prompt Triage Telemetry & Metadata ===" in inject_str
+    assert "ask_question" in inject_str
+    assert "What is this prompt about ?" in inject_str
+    assert "one or more inquiries involving no changes" in inject_str
+    assert "one or more code change request" in inject_str
+    assert "one or more task monitoring request" in inject_str
+    assert "a mix of inquiries, code change requests and/or task monitoring request" in inject_str
+    assert "invoke_subagent" in inject_str
+
+
+def test_triage_stage3_real_laya_router_prediction():
+    """Test actual Laya Router with system1 model and choice question."""
+    engine = LayaTriageEngine(use_router=True)
+    if engine._router is None:
+        pytest.skip("Laya Router not available in this environment")
+
+    choice, conf, probs = engine.evaluate_system1_triage("Implement a REST API endpoint for user registration")
+    assert choice == "response 2"
+    assert conf > 0.5
+    assert "response 2" in probs
 
 
 def test_triage_hook_script_cli(tmp_path: Path):
-    """Test running hooks/prompt_triage.py via subprocess CLI."""
-    hook_script = PLUGIN_ROOT / "hooks" / "prompt_triage.py"
+    """Test running hooks/prompt_triage.py via subprocess using uv."""
     input_payload = {
         "conversationId": "test-conv-001",
         "invocationNum": 1,
@@ -161,7 +171,8 @@ def test_triage_hook_script_cli(tmp_path: Path):
     }
 
     proc = subprocess.run(
-        [sys.executable, str(hook_script)],
+        ["uv", "run", "hooks/prompt_triage.py"],
+        cwd=str(PLUGIN_ROOT),
         input=json.dumps(input_payload),
         text=True,
         capture_output=True,
@@ -169,3 +180,10 @@ def test_triage_hook_script_cli(tmp_path: Path):
     assert proc.returncode == 0
     output = json.loads(proc.stdout)
     assert "injectSteps" in output
+    assert len(output["injectSteps"]) > 0
+    step = output["injectSteps"][0]
+    assert "systemMessage" in step
+    assert "ephemeralMessage" not in step
+    msg = step["systemMessage"]["systemMessage"]
+    assert "What is this prompt about ?" in msg
+    assert "Telemetry & Metadata" in msg

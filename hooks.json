@@ -3,14 +3,14 @@
     "SessionStart": [
       {
         "type": "command",
-        "command": "python3 hooks/register_subagents.py",
+        "command": "uv run hooks/register_subagents.py",
         "timeout": 30
       }
     ],
     "PreInvocation": [
       {
         "type": "command",
-        "command": "python3 hooks/prompt_triage.py",
+        "command": "uv run hooks/prompt_triage.py",
         "timeout": 20
       }
     ]

@@ -1,5 +1,5 @@
 ---
-name: coding-orchestrator
+name: coding
 description: >-
   Orchestrate full-lifecycle software development tasks through the 6-stage
   coordinated workflow: coding-clarify, coding-specify, coding-plan,
@@ -8,7 +8,7 @@ description: >-
 
 # Coding Orchestrator (`@coding`)
 
-The `coding-orchestrator` guides software requests through a rigorous, multi-agent development pipeline.
+The `coding` subagent guides software requests through a rigorous, multi-agent development pipeline.
 
 ## Workflow Pipeline
 
