@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Prompt Triage Lifecycle Hook for Antigravity.
 
-Triages incoming user prompts using Laya Router System 1 model and Antigravity SDK style hooks:
+Triages incoming user prompts using Laya Router System 1 model:
 Asks: "What is this prompt about ?" with:
 - response 1: one or more inquiries involving no changes
 - response 2: one or more code change request
@@ -35,15 +35,6 @@ os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 warnings.filterwarnings("ignore")
 
-from google.antigravity import types
-from google.antigravity.hooks import (
-    HookContext,
-    PreTurnHook,
-    OnSessionStartHook,
-    pre_turn,
-    on_session_start,
-)
-
 logger = logging.getLogger(__name__)
 
 TRIAGE_QUESTION = "What is this prompt about ?"
@@ -67,6 +58,28 @@ INTENT_TO_RESPONSE = {
     "monitoring": "response 3",
     "mixed": "response 4",
 }
+
+
+class HookResult(BaseModel):
+    """Result of a hook execution."""
+    allow: bool = True
+    message: Optional[str] = None
+
+
+class HookContext:
+    """Context state passed to lifecycle hooks."""
+
+    def __init__(self, initial_state: Optional[dict[str, Any]] = None):
+        self._state: dict[str, Any] = dict(initial_state) if initial_state else {}
+
+    def get_state(self, key: str, default: Any = None) -> Any:
+        return self._state.get(key, default)
+
+    def set_state(self, key: str, value: Any) -> None:
+        self._state[key] = value
+
+    def update_state(self, updates: dict[str, Any]) -> None:
+        self._state.update(updates)
 
 
 class TriageResult(BaseModel):
@@ -325,8 +338,8 @@ class LayaTriageEngine:
         )
 
 
-def extract_prompt_text(data: types.Content) -> str:
-    """Extract plain text string from SDK types.Content primitive or list."""
+def extract_prompt_text(data: Any) -> str:
+    """Extract plain text string from prompt primitive, dict, or list."""
     if isinstance(data, str):
         return data
     if isinstance(data, list):
@@ -336,24 +349,33 @@ def extract_prompt_text(data: types.Content) -> str:
                 parts.append(item)
             elif hasattr(item, "text") and getattr(item, "text"):
                 parts.append(str(getattr(item, "text")))
+            elif isinstance(item, dict) and "text" in item:
+                parts.append(str(item["text"]))
             elif hasattr(item, "name") and getattr(item, "name"):
                 parts.append(f"/{getattr(item, 'name')}")
+            elif isinstance(item, dict) and "name" in item:
+                parts.append(f"/{item['name']}")
         return " ".join(parts)
     if hasattr(data, "text") and getattr(data, "text"):
         return str(getattr(data, "text"))
+    if isinstance(data, dict):
+        if "text" in data:
+            return str(data["text"])
+        if "lastUserInput" in data:
+            return str(data["lastUserInput"])
     return str(data)
 
 
-class PromptTriageHook(PreTurnHook):
-    """Google Antigravity PreTurnHook that triages user prompts via Laya Router."""
+class PromptTriageHook:
+    """Prompt triage hook that triages user prompts via Laya Router."""
 
     def __init__(self, use_router: bool = True):
         self.engine = LayaTriageEngine(use_router=use_router)
 
-    async def run(self, context: HookContext, data: types.Content) -> types.HookResult:
+    async def run(self, context: HookContext, data: Any) -> HookResult:
         prompt_text = extract_prompt_text(data).strip()
         if not prompt_text:
-            return types.HookResult(allow=True, message="empty prompt")
+            return HookResult(allow=True, message="empty prompt")
 
         inv_num = context.get_state("invocation_num", 1)
         conv_id = context.get_state("conversation_id", None)
@@ -378,28 +400,32 @@ class PromptTriageHook(PreTurnHook):
         context.set_state("response_confidence", result.response_confidence)
         context.set_state("requires_user_confirmation", result.requires_user_confirmation)
 
-        return types.HookResult(
+        return HookResult(
             allow=True,
             message=result.response_choice or result.intent or "allowed",
         )
 
 
-@pre_turn
-async def prompt_triage_pre_turn(context: HookContext, data: types.Content) -> types.HookResult:
-    """Decorator-based Antigravity PreTurnHook for prompt triage."""
-    hook = PromptTriageHook(use_router=True)
-    return await hook.run(context, data)
+def pre_turn(fn: Any) -> Any:
+    return fn
 
 
-@on_session_start
+def on_session_start(fn: Any) -> Any:
+    return fn
+
+
 async def session_start_triage(context: HookContext) -> None:
-    """Antigravity OnSessionStartHook initializing triage state."""
     context.set_state("triage_initialized", True)
     context.set_state("invocation_num", 1)
 
 
+async def prompt_triage_pre_turn(context: HookContext, data: Any) -> HookResult:
+    hook = PromptTriageHook(use_router=True)
+    return await hook.run(context, data)
+
+
 async def run_hook_async(payload: dict) -> list[dict]:
-    """Execute PromptTriageHook within an Antigravity HookContext."""
+    """Execute PromptTriageHook within a HookContext."""
     prompt = payload.get("lastUserInput", "")
     if not prompt:
         transcript_path = payload.get("transcriptPath", "")

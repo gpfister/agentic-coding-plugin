@@ -7,14 +7,13 @@ import sys
 from pathlib import Path
 import pytest
 
-from google.antigravity import types
-from google.antigravity.hooks import HookContext
-
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 if str(PLUGIN_ROOT) not in sys.path:
     sys.path.insert(0, str(PLUGIN_ROOT))
 
 from hooks.prompt_triage import (
+    HookContext,
+    HookResult,
     PromptTriageHook,
     prompt_triage_pre_turn,
     session_start_triage,
@@ -30,7 +29,7 @@ def test_extract_prompt_text():
     assert extract_prompt_text(["part1", "part2"]) == "part1 part2"
 
 
-def test_sdk_style_prompt_triage_hook_allow():
+def test_prompt_triage_hook_allow():
     async def _run():
         context = HookContext()
         context.set_state("invocation_num", 1)
@@ -38,7 +37,7 @@ def test_sdk_style_prompt_triage_hook_allow():
         hook = PromptTriageHook(use_router=False)
         result = await hook.run(context, "How does this code work?")
 
-        assert isinstance(result, types.HookResult)
+        assert isinstance(result, HookResult)
         assert result.allow is True
         assert result.message in ("response 1", "question")
         assert context.get_state("triage_intent") == "question"
@@ -55,10 +54,10 @@ def test_sdk_style_prompt_triage_hook_allow():
     asyncio.run(_run())
 
 
-def test_sdk_style_session_start_hook():
+def test_session_start_hook():
     async def _run():
         context = HookContext()
-        await session_start_triage.run(context, None)
+        await session_start_triage(context)
         assert context.get_state("triage_initialized") is True
         assert context.get_state("invocation_num") == 1
 
