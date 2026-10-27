@@ -1,6 +1,6 @@
-# Coding Standards & Guidelines — gp-coding-plugin
+# Coding Standards & Guidelines — agentic-coding-plugin
 
-This rule set applies whenever the `gp-coding-plugin` is active in an Antigravity session.
+This rule set applies whenever the `agentic-coding-plugin` is active in an Antigravity session.
 
 ---
 

@@ -1,8 +1,12 @@
 [project]
-name = "gp-coding-plugin"
+name = "agentic-coding-plugin"
 version = "0.1.0"
 description = "Antigravity coding companion plugin bundling engineering standards and clean code review."
 readme = "README.md"
+license = "MIT"
+authors = [
+    { name = "Greg PFISTER", email = "gregory.pfister@gmail.com" }
+]
 requires-python = ">=3.11"
 dependencies = [
     "laya>=0.4.15",

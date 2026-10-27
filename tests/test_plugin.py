@@ -1,4 +1,4 @@
-"""Tests for gp-coding-plugin structure and scripts."""
+"""Tests for agentic-coding-plugin structure and scripts."""
 
 from pathlib import Path
 
@@ -16,7 +16,24 @@ def test_plugin_manifest_valid():
     manifest_file = PLUGIN_ROOT / "plugin.json"
     assert manifest_file.exists(), "plugin.json must exist"
     data = json.loads(manifest_file.read_text(encoding="utf-8"))
-    assert data.get("name") == "gp-coding-plugin"
+    assert data.get("name") == "agentic-coding-plugin"
+    assert data.get("license") == "MIT"
+
+
+def test_license_exists_and_mit():
+    license_file = PLUGIN_ROOT / "LICENSE"
+    assert license_file.exists(), "LICENSE must exist"
+    content = license_file.read_text(encoding="utf-8")
+    assert "MIT License" in content
+    assert "Greg PFISTER" in content
+
+
+def test_contributing_exists():
+    contrib_file = PLUGIN_ROOT / "CONTRIBUTING.md"
+    assert contrib_file.exists(), "CONTRIBUTING.md must exist"
+    content = contrib_file.read_text(encoding="utf-8")
+    assert "Contributing to agentic-coding-plugin" in content
+    assert "MIT License" in content
 
 
 def test_skills_exist():

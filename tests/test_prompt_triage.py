@@ -38,8 +38,8 @@ def test_clean_user_prompt():
     raw2 = (
         "<USER_REQUEST>\n"
         "Improve prompt_triage.py -> lower the threeshold to 0.4\n"
-        "/Users/gpfister/Development/Projects/gpfister/agentic/gp-coding-plugin/hooks/register_subagents.py"
-        "/Users/gpfister/Development/Projects/gpfister/agentic/gp-coding-plugin/hooks/prompt_triage.py\n"
+        "/Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/hooks/register_subagents.py"
+        "/Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/hooks/prompt_triage.py\n"
         "</USER_REQUEST>\n"
         "<ADDITIONAL_METADATA>some metadata</ADDITIONAL_METADATA>"
     )

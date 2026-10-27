@@ -11,6 +11,29 @@ resolution-markers = [
 ]
 
 [[package]]
+name = "agentic-coding-plugin"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "laya" },
+    { name = "pydantic" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "laya", specifier = ">=0.4.15" },
+    { name = "pydantic", specifier = ">=2.10.0" },
+]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = ">=8.0.0" }]
+
+[[package]]
 name = "annotated-doc"
 version = "0.0.5"
 source = { registry = "https://pypi.org/simple" }
@@ -157,29 +180,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/77/cd/9be253869fc42e764
 wheels = [
     { url = "https://files.pythonhosted.org/packages/6c/c0/a98505f18594f1bce828bb159cec0fcf9860562f1a2c85913409fc8f3d9e/fsspec-2026.9.0-py3-none-any.whl", hash = "sha256:8dd6e646e99ea382bd85f97a45e6b526a442d79423a7dc673f1e2756d05fcb5f", size = 221738, upload-time = "2026-09-18T17:50:41.341Z" },
 ]
-
-[[package]]
-name = "gp-coding-plugin"
-version = "0.1.0"
-source = { virtual = "." }
-dependencies = [
-    { name = "laya" },
-    { name = "pydantic" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "pytest" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "laya", specifier = ">=0.4.15" },
-    { name = "pydantic", specifier = ">=2.10.0" },
-]
-
-[package.metadata.requires-dev]
-dev = [{ name = "pytest", specifier = ">=8.0.0" }]
 
 [[package]]
 name = "h11"

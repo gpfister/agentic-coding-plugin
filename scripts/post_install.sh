@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-echo "==> Running post_install for gp-coding-plugin..."
+echo "==> Running post_install for agentic-coding-plugin..."
 cd "${PLUGIN_DIR}"
 
 if ! command -v uv &> /dev/null; then

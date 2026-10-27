@@ -1,7 +1,8 @@
 {
-  "name": "gp-coding-plugin",
+  "name": "agentic-coding-plugin",
   "version": "0.1.0",
   "description": "Antigravity coding companion plugin bundling engineering standards and clean code review skills.",
+  "license": "MIT",
   "scripts": {
     "post_install": "scripts/post_install.sh"
   }

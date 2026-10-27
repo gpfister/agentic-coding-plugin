@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """SessionStart Hook: Registers subagents and injects orchestration guidance.
 
-Reads agent specifications from gp-coding-plugin/agents/*.md and uses define_agent
+Reads agent specifications from agentic-coding-plugin/agents/*.md and uses define_agent
 to register all pipeline and monitoring agents, injecting session startup guidance,
 permissions, and Antigravity interactive artifact approval (Approve/Reject) protocols into Antigravity.
 """
@@ -90,7 +90,7 @@ def register_agents() -> list[dict[str, Any]]:
 
 
 def discover_agents() -> list[dict[str, str]]:
-    """Scan gp-coding-plugin/agents/ for all markdown agent definitions."""
+    """Scan agentic-coding-plugin/agents/ for all markdown agent definitions."""
     agents = []
     if not AGENTS_DIR.exists():
         return agents
@@ -107,9 +107,9 @@ def build_session_guidance(
 ) -> str:
     """Construct system guidance describing available subagents, registered agents, and orchestration protocol."""
     lines = [
-        "gp-coding-plugin Subagent System Initialized:",
+        "agentic-coding-plugin Subagent System Initialized:",
         "",
-        "Available Subagents (defined in gp-coding-plugin/agents/):",
+        "Available Subagents (defined in agentic-coding-plugin/agents/):",
     ]
     for agent in agents:
         name = agent.get("name", "")
