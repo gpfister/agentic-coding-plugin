@@ -114,17 +114,10 @@ def register_agents() -> list[dict[str, Any]]:
         content = md_file.read_text(encoding="utf-8")
         body = re.sub(r"^---\s*\n.*?\n---\s*\n?", "", content, flags=re.DOTALL).strip()
 
-        # Coding orchestrator and standalone issue investigators require subagent tools
-        # to invoke worker subagents or handoff remediation to the coding agent.
-        is_orchestrator_or_investigator = name in (
-            "coding",
-            "coding-investigate",
-            "coding-investigator",
-            "coding-invetigator",
-            "agent",
-        )
+        # Coding orchestrator requires subagent tools to invoke worker subagents
+        is_orchestrator = name in ("coding", "agent")
         enable_write = True
-        enable_subagents = is_orchestrator_or_investigator
+        enable_subagents = is_orchestrator
 
         agent_spec = define_agent(
             name=name,
@@ -179,25 +172,24 @@ def build_session_guidance(
         "",
         "Subagent Registration & Orchestration Protocol:",
         "1. **Agent Registration & Permissions**:",
-        "   - The main agent must register `@coding`, `@coding-investigate`, and worker subagents using `define_subagent` (or `define_agent`) before spawning them to grant required tool privileges.",
+        "   - The main agent must register `@coding` and worker subagents using `define_subagent` (or `define_agent`) before spawning them to grant required tool privileges.",
         "   - `@coding`: Orchestrator requiring `enable_write_tools=True` and `enable_subagent_tools=True`.",
-        "   - `@coding-investigate`: Standalone issue investigator requiring `enable_write_tools=True` and `enable_subagent_tools=True`.",
         "   - Worker Subagents (`@coding-clarify`, `@coding-specify`, `@coding-plan`, `@coding-develop`, `@coding-review`, `@coding-merge`): Require `enable_write_tools=True` so they can author artifacts, edit code, and manage branches directly.",
-        "2. **Spawning Subagents**: Use `invoke_subagent` to spawn `@coding` (TypeName='coding') or `@coding-investigate` (TypeName='coding-investigate').",
+        "2. **Spawning Subagents**: Use `invoke_subagent` to spawn `@coding` (TypeName='coding').",
         "3. **Sequential Phase Handoffs**: Coordinate the 6-stage lifecycle:",
         "   - `coding-clarify` -> `coding-specify` -> `coding-plan` -> `coding-develop` (parallel per repo) -> `coding-review` -> `coding-merge`.",
         "4. **Antigravity Interactive Artifact Approval Protocol (Approve / Reject UI)**:",
-        "   - **Mandatory Approval Gates**: `specification.md` (Stage 2), `plan.md` (Stage 3), and `issue-assessment.md` (`coding-investigate`) require user approval via Antigravity's interactive modal before proceeding to subsequent stages.",
-        "   - **Artifact Location**: Write the artifact directly to the session artifact directory: `<appDataDir>/brain/<conversation-id>/<artifact_name>.md` (e.g. `specification.md`, `plan.md`, or `issue-assessment.md`).",
+        "   - **Mandatory Approval Gates**: `specification.md` (Stage 2) and `plan.md` (Stage 3) require user approval via Antigravity's interactive modal before proceeding to subsequent stages.",
+        "   - **Artifact Location**: Write the artifact directly to the session artifact directory: `<appDataDir>/brain/<conversation-id>/<artifact_name>.md` (e.g. `specification.md` or `plan.md`).",
         "   - **Artifact Metadata**: You MUST provide `ArtifactMetadata` with `RequestFeedback=True` and `UserFacing=True` (e.g. `write_file(Path=..., Content=..., Overwrite=True, ArtifactMetadata={\"RequestFeedback\": True, \"UserFacing\": True})`).",
         "   - **Turn Termination & Sole Tool Call Rule (CRITICAL)**: To trigger the interactive Approve / Reject modal in the Antigravity UI, `write_file(..., RequestFeedback=True)` MUST be the **sole and final tool call of that turn**.",
         "     * DO NOT batch secondary tool calls (such as updating session notes in Obsidian, running shell commands, or sending messages) in the same turn or after the artifact creation. Any secondary updates must be executed *before* calling `write_file(RequestFeedback=true)`, or deferred until *after* the user provides feedback.",
         "     * Immediately stop calling tools after creating the artifact to end your turn so Antigravity presents the interactive review buttons to the user.",
         "   - **Handling User Decisions**: When the user clicks the UI button, Antigravity injects:",
-        "     * `[Approved] <artifact>.md`: Proceed immediately to the next stage (`coding-plan` after `specification.md`, `coding-develop` workers after `plan.md`, or ask correction confirmation after `issue-assessment.md`).",
-        "     * `[Rejected] <artifact>.md` (with optional feedback comments): Route feedback back to `coding-clarify` or `coding-investigate` to adjust scope and re-synthesize.",
-        "5. **Standalone Subagents**:",
-        "   - `@coding-investigate`: Standalone issue investigator diagnosing root causes across repositories, formulating solutions in `issue-assessment.md`, requesting user approval, confirming whether to start correction, and invoking `@coding` upon approval.",
+        "     * `[Approved] <artifact>.md`: Proceed immediately to the next stage (`coding-plan` after `specification.md`, `coding-develop` workers after `plan.md`).",
+        "     * `[Rejected] <artifact>.md` (with optional feedback comments): Route feedback back to `coding-clarify` to adjust scope and re-synthesize.",
+        "5. **Companion Subagents**:",
+        "   - Issue investigation is handled by `@investigate` via the companion `agentic-investigate-plugin`.",
         "   - Telemetry and stream monitoring is handled by `@monitoring` via the companion `agentic-monitoring-plugin`.",
         "6. **Background Awaiting & Resumption**: When subagents are running asynchronously or awaiting user feedback, do not poll in a loop; Antigravity automatically wakes up the orchestrator when updates or user inputs arrive. Forward user feedback to the subagent using `send_message`.",
         "7. **Informational Questions**: When prompt triage flags an inquiry involving no changes, answer directly without making code modifications ('Do not make any changes').",

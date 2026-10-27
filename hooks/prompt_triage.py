@@ -206,7 +206,7 @@ class LayaTriageEngine:
             for w in [
                 "investigate", "investigation", "investigating", "invetigate", "invetigation",
                 "diagnose", "root cause", "find the cause", "find cause", "troubleshoot",
-                "coding-investigate", "coding-investigator", "coding-invetigator",
+                "@investigate", "coding-investigate", "coding-investigator", "coding-invetigator",
                 "@coding-investigate", "@coding-investigator", "@coding-invetigator",
                 "track down the bug", "track down the issue", "track down the root cause"
             ]
@@ -338,7 +338,7 @@ class LayaTriageEngine:
                 "- If response 1 ('one or more inquiries involving no changes') is selected: the main agent will respond to the prompt directly with no code changes.\n"
                 "- If response 2 ('one or more code change request') is selected: the main agent will invoke the coding subagent using invoke_subagent(TypeName='coding', Role='Coding Workflow Orchestrator', Prompt=...).\n"
                 "- If response 3 ('one or more task monitoring request') is selected: the main agent will invoke the monitoring subagent using invoke_subagent(TypeName='monitoring', Role='Telemetry Monitor', Prompt=...).\n"
-                "- If response 4 ('one or more issue investigation request') is selected: the main agent will invoke the coding-investigate subagent using invoke_subagent(TypeName='coding-investigate', Role='Issue Investigator', Prompt=...).\n"
+                "- If response 4 ('one or more issue investigation request') is selected: the main agent will invoke the investigate subagent using invoke_subagent(TypeName='investigate', Role='Issue Investigator', Prompt=...).\n"
                 "- If response 5 ('a mix of inquiries, code change requests, task monitoring and/or issue investigation request') is selected: the main agent will reject the prompt responding that it cannot process a mix of inquiries, coding requests, monitoring tasks, and/or investigation tasks."
             )
             inject_steps.append({
@@ -381,8 +381,8 @@ class LayaTriageEngine:
         elif choice == "response 4":
             directive = (
                 "Prompt Triage Directive: Response 4 identified (issue investigation request). "
-                "You must invoke the coding-investigate subagent (@coding-investigate) using invoke_subagent:\n"
-                "invoke_subagent(TypeName='coding-investigate', Role='Issue Investigator', Prompt=...). "
+                "You must invoke the investigate subagent (@investigate) using invoke_subagent:\n"
+                "invoke_subagent(TypeName='investigate', Role='Issue Investigator', Prompt=...). "
                 "Do not perform investigation directly in the main agent turn."
             )
         else:  # response 5

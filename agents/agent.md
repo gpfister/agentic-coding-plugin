@@ -31,9 +31,7 @@ agents/
 │   └── agent.md
 ├── coding-review/                  # Stage 5: QA Gatekeeper
 │   └── agent.md
-├── coding-merge/                   # Stage 6: Release & Merge Engineer
-│   └── agent.md
-└── coding-investigate/             # Standalone Issue Investigator
+└── coding-merge/                   # Stage 6: Release & Merge Engineer
     └── agent.md
 ```
 
@@ -49,7 +47,6 @@ Subagents are discovered dynamically and registered via `define_subagent` (or `d
 | **`@coding-develop`** | [`agents/coding-develop/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-develop/) | `True` | `False` | `True` | Isolated repo implementation, tests, linting, docs |
 | **`@coding-review`** | [`agents/coding-review/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-review/) | `True` | `False` | `True` | Deliverables verification against specification |
 | **`@coding-merge`** | [`agents/coding-merge/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-merge/) | `True` | `False` | `True` | Local branch merge or GitHub Pull Request (`gh pr create`) |
-| **`@coding-investigate`**| [`agents/coding-investigate/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-investigate/) | `True` | `True` | `True` | Multi-repo defect investigation & remediation handoff |
 
 ---
 
@@ -109,14 +106,10 @@ coding-clarify ──> coding-specify ──> coding-plan ──> coding-develop
 
 ---
 
-## 3. Specialized Workflows
+## 3. Companion Plugins & Workflows
 
-### 3.1 Standalone Issue Investigation (`@coding-investigate`)
-For bugs, anomalies, and test failures, `@coding-investigate` runs an autonomous multi-repository investigation:
-1. Search code, error messages, stack traces, configs, and git history across all repositories.
-2. Formulate root cause analysis and proposed remediation in an `issue-assessment.md` artifact.
-3. Submit `issue-assessment.md` for interactive user approval (`RequestFeedback=True`).
-4. Upon user approval, confirm whether to begin automated correction; if confirmed, invoke `@coding` to execute the 6-stage lifecycle.
+### 3.1 Autonomous Issue Investigation (`@investigate`)
+For complex bugs, defects, test failures, or cross-repository diagnostic tasks, use the companion plugin **`agentic-investigate-plugin`** (`@investigate`), which performs autonomous root cause analysis, user interrogation, and hands off approved fixes to `@coding`.
 
 ### 3.2 External Telemetry & Stream Surveillance (`@monitoring`)
 For long-running tasks, Docker logs, serial consoles (`/dev/tty*`), or continuous build streams, use the companion plugin **`agentic-monitoring-plugin`** (`@monitoring`), which provides real-time streaming surveillance with interactive anomaly pause gates.
@@ -125,7 +118,7 @@ For long-running tasks, Docker logs, serial consoles (`/dev/tty*`), or continuou
 
 ## 4. Antigravity Interactive Artifact Approval Protocol
 
-Artifacts requiring human confirmation (`specification.md`, `plan.md`, `issue-assessment.md`) must trigger the interactive **Approve / Reject** modal in the Antigravity UI:
+Artifacts requiring human confirmation (`specification.md`, `plan.md`) must trigger the interactive **Approve / Reject** modal in the Antigravity UI:
 
 1. **Artifact Location**: Write directly to the conversation artifact directory:
    `<appDataDir>/brain/<conversation-id>/<artifact_name>.md`.

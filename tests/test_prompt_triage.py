@@ -138,7 +138,7 @@ def test_triage_stage3_response3_task_monitoring_request():
 
 
 def test_triage_stage3_response4_issue_investigation_request():
-    """Response 4: one or more issue investigation request -> invoke coding-investigate using invoke_subagent."""
+    """Response 4: one or more issue investigation request -> invoke investigate using invoke_subagent."""
     engine = LayaTriageEngine(use_router=False)
     result = engine.triage("Please investigate why the checkout endpoint returns 500 error", invocation_num=0)
     assert result.response_choice == "response 4"
@@ -150,7 +150,7 @@ def test_triage_stage3_response4_issue_investigation_request():
     assert "=== Prompt Triage Telemetry & Metadata ===" in msg
     assert "What is this prompt about ?" in msg
     assert "invoke_subagent" in msg
-    assert "coding-investigate" in msg
+    assert "investigate" in msg
 
 
 def test_triage_stage3_response5_mixed_request():
@@ -188,7 +188,7 @@ def test_triage_stage3_ambiguous_low_confidence_triggers_ask_question():
     assert "one or more task monitoring request" in inject_str
     assert "one or more issue investigation request" in inject_str
     assert "a mix of inquiries, code change requests, task monitoring and/or issue investigation request" in inject_str
-    assert "coding-investigate" in inject_str
+    assert "investigate" in inject_str
     assert "invoke_subagent" in inject_str
 
 

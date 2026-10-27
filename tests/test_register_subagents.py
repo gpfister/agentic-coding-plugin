@@ -25,7 +25,6 @@ def test_discover_agents():
         "coding",
         "coding-clarify",
         "coding-develop",
-        "coding-investigate",
         "coding-merge",
         "coding-plan",
         "coding-review",
@@ -33,6 +32,7 @@ def test_discover_agents():
     ]
     for expected in expected_agents:
         assert expected in agent_names, f"Expected agent '{expected}' to be discovered in agents/"
+    assert "coding-investigate" not in agent_names, "coding-investigate agent should be moved to agentic-investigate-plugin"
     assert "monitoring" not in agent_names, "monitoring agent should be moved to agentic-monitoring-plugin"
     assert "coding-monitoring" not in agent_names, "coding-monitoring agent should be moved to agentic-monitoring-plugin"
     assert "coding-orchestrator" not in agent_names, "coding-orchestrator should be merged into coding"
@@ -47,12 +47,6 @@ def test_parse_frontmatter():
     assert meta.get("name") == "coding"
     assert "orchestrator" in meta.get("description", "").lower()
 
-    investigator_md = PLUGIN_ROOT / "agents" / "coding-investigate" / "agent.md"
-    assert investigator_md.exists()
-    meta_inv = parse_agent_frontmatter(investigator_md)
-    assert meta_inv.get("name") == "coding-investigate"
-    assert "investigation" in meta_inv.get("description", "").lower()
-
     root_agent_md = PLUGIN_ROOT / "agents" / "agent.md"
     assert root_agent_md.exists()
     meta_root = parse_agent_frontmatter(root_agent_md)
@@ -66,7 +60,6 @@ def test_subagent_directory_layout():
         "coding",
         "coding-clarify",
         "coding-develop",
-        "coding-investigate",
         "coding-merge",
         "coding-plan",
         "coding-review",
@@ -108,19 +101,13 @@ def test_register_agents_uses_define_agent():
     registered = register_agents()
     reg_names = [r["name"] for r in registered]
     assert "coding" in reg_names
-    assert "coding-investigate" in reg_names
+    assert "coding-investigate" not in reg_names
     assert "monitoring" not in reg_names
 
     coding = next(r for r in registered if r["name"] == "coding")
     assert coding["enable_subagent_tools"] is True
     assert coding["enable_write_tools"] is True
     assert "Coding Workflow Orchestrator" in coding["system_prompt"]
-
-    # Standalone issue investigator requires write tools (for issue assessment) and subagent tools (to invoke coding orchestrator)
-    inv = next(r for r in registered if r["name"] == "coding-investigate")
-    assert inv["enable_write_tools"] is True
-    assert inv["enable_subagent_tools"] is True
-    assert "Issue Investigator" in inv["system_prompt"]
 
     # Subagents coding-specify and coding-plan must have write tools enabled to author artifacts
     specify = next(r for r in registered if r["name"] == "coding-specify")
@@ -135,13 +122,11 @@ def test_build_session_guidance():
     registered = register_agents()
     guidance = build_session_guidance(agents, registered)
     assert "@coding" in guidance
-    assert "@coding-investigate" in guidance
     assert "define_agent" in guidance or "define_subagent" in guidance
     assert "invoke_subagent" in guidance
     assert "coding-clarify" in guidance
     assert "specification.md" in guidance
     assert "plan.md" in guidance
-    assert "issue-assessment.md" in guidance
     assert "RequestFeedback" in guidance
     assert "sole and final tool call" in guidance
     assert "[Approved]" in guidance
@@ -167,6 +152,5 @@ def test_register_subagents_cli():
     sys_msg = output["injectSteps"][0]["systemMessage"]["systemMessage"]
     assert "define_agent" in sys_msg or "define_subagent" in sys_msg
     assert "@coding" in sys_msg
-    assert "@coding-investigate" in sys_msg
     assert "RequestFeedback" in sys_msg
     assert "sole and final tool call" in sys_msg
