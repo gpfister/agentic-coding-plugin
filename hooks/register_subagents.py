@@ -30,7 +30,10 @@ def parse_agent_frontmatter(md_path: Path) -> dict[str, str]:
                 key, val = line.split(":", 1)
                 metadata[key.strip()] = val.strip().strip('"').strip("'")
     if "name" not in metadata:
-        metadata["name"] = md_path.stem
+        if md_path.stem == "agent" and md_path.parent != AGENTS_DIR:
+            metadata["name"] = md_path.parent.name
+        else:
+            metadata["name"] = md_path.stem
     return metadata
 
 
@@ -57,13 +60,54 @@ def define_agent(
 define_subagent = define_agent
 
 
+def find_agent_files() -> list[Path]:
+    """Find canonical agent markdown files across subdirectories and top-level agents."""
+    if not AGENTS_DIR.exists():
+        return []
+    files: list[Path] = []
+    seen_names: set[str] = set()
+
+    # 1. Directory-based subagents: agents/<agent>/agent.md (or agents/<agent>/<agent>.md)
+    for entry in sorted(AGENTS_DIR.iterdir()):
+        if entry.is_dir() and not entry.name.startswith("."):
+            agent_md = entry / "agent.md"
+            named_md = entry / f"{entry.name}.md"
+            target: Path | None = None
+            if agent_md.exists():
+                target = agent_md
+            elif named_md.exists():
+                target = named_md
+            else:
+                candidates = list(entry.glob("*.md"))
+                if candidates:
+                    target = sorted(candidates)[0]
+
+            if target:
+                meta = parse_agent_frontmatter(target)
+                name = meta.get("name", entry.name)
+                if name not in seen_names:
+                    seen_names.add(name)
+                    files.append(target)
+
+    # 2. Top-level agent files: agents/*.md (including agents/agent.md)
+    for md_file in sorted(AGENTS_DIR.glob("*.md")):
+        meta = parse_agent_frontmatter(md_file)
+        name = meta.get("name", md_file.stem)
+        if name not in seen_names:
+            seen_names.add(name)
+            files.append(md_file)
+
+    return files
+
+
 def register_agents() -> list[dict[str, Any]]:
     """Register coding, monitoring, investigator, and pipeline worker agents using define_agent."""
     registered: list[dict[str, Any]] = []
-    if not AGENTS_DIR.exists():
+    agent_files = find_agent_files()
+    if not agent_files:
         return registered
 
-    for md_file in sorted(AGENTS_DIR.glob("*.md")):
+    for md_file in agent_files:
         meta = parse_agent_frontmatter(md_file)
         name = meta.get("name", md_file.stem)
         desc = meta.get("description", "")
@@ -72,7 +116,13 @@ def register_agents() -> list[dict[str, Any]]:
 
         # Coding orchestrator and standalone issue investigators require subagent tools
         # to invoke worker subagents or handoff remediation to the coding agent.
-        is_orchestrator_or_investigator = name in ("coding", "coding-investigate", "coding-investigator", "coding-invetigator")
+        is_orchestrator_or_investigator = name in (
+            "coding",
+            "coding-investigate",
+            "coding-investigator",
+            "coding-invetigator",
+            "agent",
+        )
         enable_write = True
         enable_subagents = is_orchestrator_or_investigator
 
@@ -92,9 +142,8 @@ def register_agents() -> list[dict[str, Any]]:
 def discover_agents() -> list[dict[str, str]]:
     """Scan agentic-coding-plugin/agents/ for all markdown agent definitions."""
     agents = []
-    if not AGENTS_DIR.exists():
-        return agents
-    for md_file in sorted(AGENTS_DIR.glob("*.md")):
+    agent_files = find_agent_files()
+    for md_file in agent_files:
         meta = parse_agent_frontmatter(md_file)
         meta["file_path"] = str(md_file)
         agents.append(meta)

@@ -45,11 +45,12 @@ Whenever developing or extending this plugin, uphold the core engineering tenets
 
 ```text
 agentic-coding-plugin/
-├── agents/             # Declarative markdown subagent specifications (*.md)
-│   ├── coding.md       # Stage orchestrator (@coding)
-│   ├── coding-*.md     # Worker subagents (clarify, specify, plan, develop, review, merge)
-│   ├── coding-investigate.md # Standalone issue investigator
-│   └── monitoring.md   # Background telemetry & stream surveillance (@monitoring)
+├── agents/             # Declarative markdown subagent specifications
+│   ├── agent.md        # Central subagents directory & workflow specification
+│   ├── coding/         # Stage orchestrator (@coding)
+│   ├── coding-*/       # Worker subagents (clarify, specify, plan, develop, review, merge)
+│   ├── coding-investigate/ # Standalone issue investigator
+│   └── monitoring/     # Background telemetry & stream surveillance (@monitoring)
 ├── hooks/              # Scripted lifecycle hooks executed via uv run
 │   ├── register_subagents.py # SessionStart: registers subagents & guidance
 │   └── prompt_triage.py      # PreInvocation: Laya Router System 1 intent classifier
@@ -90,7 +91,7 @@ agentic-coding-plugin/
   ```
 
 ### 4.3 Adding or Modifying Subagents
-1. Add or edit the declarative agent file under [`agents/<agent-name>.md`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/).
+1. Create a dedicated directory under [`agents/<agent-name>/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/) with [`agent.md`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/) (or `<agent-name>.md`).
 2. Ensure the frontmatter contains `name` and `description`:
    ```markdown
    ---

@@ -41,17 +41,53 @@ def test_discover_agents():
 
 
 def test_parse_frontmatter():
-    coding_md = PLUGIN_ROOT / "agents" / "coding.md"
+    coding_md = PLUGIN_ROOT / "agents" / "coding" / "agent.md"
     assert coding_md.exists()
     meta = parse_agent_frontmatter(coding_md)
     assert meta.get("name") == "coding"
     assert "orchestrator" in meta.get("description", "").lower()
 
-    investigator_md = PLUGIN_ROOT / "agents" / "coding-investigate.md"
+    investigator_md = PLUGIN_ROOT / "agents" / "coding-investigate" / "agent.md"
     assert investigator_md.exists()
     meta_inv = parse_agent_frontmatter(investigator_md)
     assert meta_inv.get("name") == "coding-investigate"
     assert "investigation" in meta_inv.get("description", "").lower()
+
+    root_agent_md = PLUGIN_ROOT / "agents" / "agent.md"
+    assert root_agent_md.exists()
+    meta_root = parse_agent_frontmatter(root_agent_md)
+    assert meta_root.get("name") == "agent"
+    assert "workflow" in meta_root.get("description", "").lower()
+
+
+def test_subagent_directory_layout():
+    """Verify that each subagent is structured in agents/<agent>/<agent>.md and agents/<agent>/agent.md."""
+    expected_agents = [
+        "coding",
+        "coding-clarify",
+        "coding-develop",
+        "coding-investigate",
+        "coding-merge",
+        "coding-monitoring",
+        "coding-plan",
+        "coding-review",
+        "coding-specify",
+        "monitoring",
+    ]
+    for agent_name in expected_agents:
+        agent_dir = PLUGIN_ROOT / "agents" / agent_name
+        assert agent_dir.is_dir(), f"Expected directory {agent_dir} to exist"
+        named_file = agent_dir / f"{agent_name}.md"
+        agent_file = agent_dir / "agent.md"
+        assert named_file.exists(), f"Expected {named_file} to exist"
+        assert agent_file.exists(), f"Expected {agent_file} to exist"
+
+    # Verify central workflow guide agents/agent.md
+    central_agent_md = PLUGIN_ROOT / "agents" / "agent.md"
+    assert central_agent_md.is_file(), "agents/agent.md must exist"
+    content = central_agent_md.read_text(encoding="utf-8")
+    assert "6-Stage Coding Workflow" in content
+    assert "Subagent Registration" in content
 
 
 def test_define_agent():
