@@ -20,35 +20,25 @@ Each subagent resides in its own isolated directory under `agents/<agent>/` cont
 agents/
 ├── agent.md                        # Master subagent & workflow specification (this file)
 ├── coding/                         # Coding Workflow Orchestrator
-│   ├── agent.md -> coding.md
-│   └── coding.md
+│   └── agent.md
 ├── coding-clarify/                 # Stage 1: Requirement Clarifier
-│   ├── agent.md -> coding-clarify.md
-│   └── coding-clarify.md
+│   └── agent.md
 ├── coding-specify/                 # Stage 2: Specification Architect
-│   ├── agent.md -> coding-specify.md
-│   └── coding-specify.md
+│   └── agent.md
 ├── coding-plan/                    # Stage 3: Architecture Planner
-│   ├── agent.md -> coding-plan.md
-│   └── coding-plan.md
+│   └── agent.md
 ├── coding-develop/                 # Stage 4: Per-Repo Software Engineer
-│   ├── agent.md -> coding-develop.md
-│   └── coding-develop.md
+│   └── agent.md
 ├── coding-review/                  # Stage 5: QA Gatekeeper
-│   ├── agent.md -> coding-review.md
-│   └── coding-review.md
+│   └── agent.md
 ├── coding-merge/                   # Stage 6: Release & Merge Engineer
-│   ├── agent.md -> coding-merge.md
-│   └── coding-merge.md
+│   └── agent.md
 ├── coding-investigate/             # Standalone Issue Investigator
-│   ├── agent.md -> coding-investigate.md
-│   └── coding-investigate.md
+│   └── agent.md
 ├── coding-monitoring/              # Telemetry & Stream Monitor
-│   ├── agent.md -> coding-monitoring.md
-│   └── coding-monitoring.md
+│   └── agent.md
 └── monitoring/                     # Short alias for coding-monitoring
-    ├── agent.md -> monitoring.md
-    └── monitoring.md
+    └── agent.md
 ```
 
 ### 1.2 Subagent Registration & Tool Privilege Model

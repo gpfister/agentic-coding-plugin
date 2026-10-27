@@ -61,7 +61,7 @@ def test_parse_frontmatter():
 
 
 def test_subagent_directory_layout():
-    """Verify that each subagent is structured in agents/<agent>/<agent>.md and agents/<agent>/agent.md."""
+    """Verify that each subagent directory contains only agent.md: agents/<agent>/agent.md."""
     expected_agents = [
         "coding",
         "coding-clarify",
@@ -77,10 +77,11 @@ def test_subagent_directory_layout():
     for agent_name in expected_agents:
         agent_dir = PLUGIN_ROOT / "agents" / agent_name
         assert agent_dir.is_dir(), f"Expected directory {agent_dir} to exist"
-        named_file = agent_dir / f"{agent_name}.md"
         agent_file = agent_dir / "agent.md"
-        assert named_file.exists(), f"Expected {named_file} to exist"
-        assert agent_file.exists(), f"Expected {agent_file} to exist"
+        assert agent_file.is_file(), f"Expected {agent_file} to be a regular file"
+        # Assert only agent.md exists in the directory
+        dir_files = [f.name for f in agent_dir.iterdir() if not f.name.startswith(".")]
+        assert dir_files == ["agent.md"], f"Expected only ['agent.md'] in {agent_dir}, got {dir_files}"
 
     # Verify central workflow guide agents/agent.md
     central_agent_md = PLUGIN_ROOT / "agents" / "agent.md"

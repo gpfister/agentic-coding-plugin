@@ -1,12 +1,15 @@
 {
-  "agentic-coding-companion": {
+  "subagent-registration": {
+    "enabled": false,
     "SessionStart": [
       {
         "type": "command",
         "command": "uv run hooks/register_subagents.py",
         "timeout": 30
       }
-    ],
+    ]
+  },
+  "agentic-coding-companion": {
     "PreInvocation": [
       {
         "type": "command",

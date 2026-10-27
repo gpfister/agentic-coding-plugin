@@ -44,3 +44,16 @@ def test_skills_exist():
 def test_rules_exist():
     rules_file = PLUGIN_ROOT / "rules" / "AGENTS.md"
     assert rules_file.exists(), "rules/AGENTS.md must exist"
+
+
+def test_session_start_hook_deactivated():
+    import json
+    hooks_file = PLUGIN_ROOT / "hooks.json"
+    assert hooks_file.exists(), "hooks.json must exist"
+    data = json.loads(hooks_file.read_text(encoding="utf-8"))
+    has_session_start = False
+    for hook_name, hook_config in data.items():
+        if "SessionStart" in hook_config:
+            has_session_start = True
+            assert hook_config.get("enabled") is False, f"Hook '{hook_name}' with SessionStart must have enabled: false"
+    assert has_session_start, "SessionStart must be present and deactivated in hooks.json"
