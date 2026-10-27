@@ -49,8 +49,7 @@ agentic-coding-plugin/
 │   ├── agent.md        # Central subagents directory & workflow specification
 │   ├── coding/         # Stage orchestrator (@coding)
 │   ├── coding-*/       # Worker subagents (clarify, specify, plan, develop, review, merge)
-│   ├── coding-investigate/ # Standalone issue investigator
-│   └── monitoring/     # Background telemetry & stream surveillance (@monitoring)
+│   └── coding-investigate/ # Standalone issue investigator
 ├── hooks/              # Scripted lifecycle hooks executed via uv run
 │   ├── register_subagents.py # SessionStart: registers subagents & guidance
 │   └── prompt_triage.py      # PreInvocation: Laya Router System 1 intent classifier

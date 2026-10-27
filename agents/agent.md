@@ -33,16 +33,12 @@ agents/
 │   └── agent.md
 ├── coding-merge/                   # Stage 6: Release & Merge Engineer
 │   └── agent.md
-├── coding-investigate/             # Standalone Issue Investigator
-│   └── agent.md
-├── coding-monitoring/              # Telemetry & Stream Monitor
-│   └── agent.md
-└── monitoring/                     # Short alias for coding-monitoring
+└── coding-investigate/             # Standalone Issue Investigator
     └── agent.md
 ```
 
 ### 1.2 Subagent Registration & Tool Privilege Model
-Subagents are discovered dynamically and registered during `SessionStart` via [`hooks/register_subagents.py`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/hooks/register_subagents.py) using `define_subagent` (or `define_agent`):
+Subagents are discovered dynamically and registered via `define_subagent` (or `define_agent`):
 
 | Agent Handle | Directory | `enable_write_tools` | `enable_subagent_tools` | `enable_mcp_tools` | Primary Responsibility |
 | :--- | :--- | :---: | :---: | :---: | :--- |
@@ -54,8 +50,6 @@ Subagents are discovered dynamically and registered during `SessionStart` via [`
 | **`@coding-review`** | [`agents/coding-review/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-review/) | `True` | `False` | `True` | Deliverables verification against specification |
 | **`@coding-merge`** | [`agents/coding-merge/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-merge/) | `True` | `False` | `True` | Local branch merge or GitHub Pull Request (`gh pr create`) |
 | **`@coding-investigate`**| [`agents/coding-investigate/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-investigate/) | `True` | `True` | `True` | Multi-repo defect investigation & remediation handoff |
-| **`@coding-monitoring`** | [`agents/coding-monitoring/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-monitoring/) | `True` | `False` | `True` | Streaming surveillance of logs, Docker, and serial ports |
-| **`@monitoring`** | [`agents/monitoring/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/monitoring/) | `True` | `False` | `True` | Alias for `@coding-monitoring` |
 
 ---
 
@@ -124,11 +118,8 @@ For bugs, anomalies, and test failures, `@coding-investigate` runs an autonomous
 3. Submit `issue-assessment.md` for interactive user approval (`RequestFeedback=True`).
 4. Upon user approval, confirm whether to begin automated correction; if confirmed, invoke `@coding` to execute the 6-stage lifecycle.
 
-### 3.2 Telemetry & Stream Surveillance (`@monitoring` / `@coding-monitoring`)
-For long-running tasks, Docker logs, serial consoles (`/dev/tty*`), or continuous build streams:
-1. Stream output continuously while scanning for error patterns and stack traces.
-2. Upon anomaly detection, immediately pause surveillance and formulate a `MonitoringAlert` JSON.
-3. Prompt the user with intervention options (Restart, Ignore, Abort, Inspect code) via `ask_question`.
+### 3.2 External Telemetry & Stream Surveillance (`@monitoring`)
+For long-running tasks, Docker logs, serial consoles (`/dev/tty*`), or continuous build streams, use the companion plugin **`agentic-monitoring-plugin`** (`@monitoring`), which provides real-time streaming surveillance with interactive anomaly pause gates.
 
 ---
 

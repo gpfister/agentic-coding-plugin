@@ -27,14 +27,14 @@ def test_discover_agents():
         "coding-develop",
         "coding-investigate",
         "coding-merge",
-        "coding-monitoring",
         "coding-plan",
         "coding-review",
         "coding-specify",
-        "monitoring",
     ]
     for expected in expected_agents:
         assert expected in agent_names, f"Expected agent '{expected}' to be discovered in agents/"
+    assert "monitoring" not in agent_names, "monitoring agent should be moved to agentic-monitoring-plugin"
+    assert "coding-monitoring" not in agent_names, "coding-monitoring agent should be moved to agentic-monitoring-plugin"
     assert "coding-orchestrator" not in agent_names, "coding-orchestrator should be merged into coding"
     assert "coding-invetigator" not in agent_names, "coding-invetigator typo should be eliminated"
     assert "coding-investigator" not in agent_names, "coding-investigator should be merged into coding-investigate"
@@ -68,11 +68,9 @@ def test_subagent_directory_layout():
         "coding-develop",
         "coding-investigate",
         "coding-merge",
-        "coding-monitoring",
         "coding-plan",
         "coding-review",
         "coding-specify",
-        "monitoring",
     ]
     for agent_name in expected_agents:
         agent_dir = PLUGIN_ROOT / "agents" / agent_name
@@ -110,17 +108,13 @@ def test_register_agents_uses_define_agent():
     registered = register_agents()
     reg_names = [r["name"] for r in registered]
     assert "coding" in reg_names
-    assert "monitoring" in reg_names
     assert "coding-investigate" in reg_names
+    assert "monitoring" not in reg_names
 
     coding = next(r for r in registered if r["name"] == "coding")
     assert coding["enable_subagent_tools"] is True
     assert coding["enable_write_tools"] is True
     assert "Coding Workflow Orchestrator" in coding["system_prompt"]
-
-    monitoring = next(r for r in registered if r["name"] == "monitoring")
-    assert monitoring["enable_write_tools"] is True
-    assert "monitoring" in monitoring["system_prompt"].lower()
 
     # Standalone issue investigator requires write tools (for issue assessment) and subagent tools (to invoke coding orchestrator)
     inv = next(r for r in registered if r["name"] == "coding-investigate")
@@ -141,7 +135,6 @@ def test_build_session_guidance():
     registered = register_agents()
     guidance = build_session_guidance(agents, registered)
     assert "@coding" in guidance
-    assert "@monitoring" in guidance
     assert "@coding-investigate" in guidance
     assert "define_agent" in guidance or "define_subagent" in guidance
     assert "invoke_subagent" in guidance
@@ -174,7 +167,6 @@ def test_register_subagents_cli():
     sys_msg = output["injectSteps"][0]["systemMessage"]["systemMessage"]
     assert "define_agent" in sys_msg or "define_subagent" in sys_msg
     assert "@coding" in sys_msg
-    assert "@monitoring" in sys_msg
     assert "@coding-investigate" in sys_msg
     assert "RequestFeedback" in sys_msg
     assert "sole and final tool call" in sys_msg
