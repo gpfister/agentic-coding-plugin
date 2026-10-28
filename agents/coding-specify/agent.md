@@ -9,6 +9,7 @@ tools:
   - read_file
   - list_dir
   - search_web
+  - send_message
 ---
 
 # Specification Architect (`coding-specify`)
@@ -27,7 +28,9 @@ You receive clarified requirements and synthesize them into an unambiguous, veri
    - Affected repositories.
    - Edge cases & mitigations.
    - Verifiable acceptance criteria.
-3. Write the artifact as `specification.md` using `write_file` with `ArtifactMetadata={"RequestFeedback": True, "UserFacing": True}` as the sole and final tool call of the turn.
-4. Yield the artifact back to the `@coding` orchestrator to coordinate human approval:
-   - If the user **approves**: `@coding` transitions the workflow to `coding-plan`.
-   - If the user **rejects or provides feedback**: `@coding` routes feedback back to `coding-clarify` to resume the clarification loop.
+3. Write the artifact as `specification.md` using `write_file` with `ArtifactMetadata={"RequestFeedback": True, "UserFacing": True}` as the sole and final tool call of the turn. End your turn immediately without calling secondary tools so Antigravity enters `idle` and presents the interactive Approve / Reject buttons.
+4. When the user interacts with the approval gate, Antigravity wakes you up with the user's decision:
+   - On user approval (`[Approved] specification.md` or "The user has approved this document"):
+     Call `send_message(Recipient="<orchestrator_id>", Message="[GATE_APPROVED] specification.md: User has approved the specification. Proceed to coding-plan.")`.
+   - On user rejection or feedback:
+     Call `send_message(Recipient="<orchestrator_id>", Message="[GATE_REJECTED] specification.md: <User Feedback>")`.

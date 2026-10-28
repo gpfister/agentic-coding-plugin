@@ -52,9 +52,11 @@ coding-clarify ──> coding-specify ──> coding-plan ──> coding-develop
       Prompt=f"Synthesize the requirements into specification.md: {clarification_summary}"
   )
   ```
-- **Approval Gate**: `coding-specify` writes `specification.md` and awaits user feedback:
-  - If the user **approves**: proceed to Stage 3 (`coding-plan`).
-  - If the user **rejects or provides feedback**: route back to `coding-clarify`.
+- **Approval Gate**: `coding-specify` writes `specification.md` (with `RequestFeedback=True`) as its sole and final tool call, then enters the `idle` state awaiting human review.
+- **IDLE GUARD**: When Antigravity notifies `Subagent <id> has gone idle`, **DO NOT proceed to Stage 3!** Terminate your turn immediately without calling any tools, and remain idle.
+- **Stage Advancement**:
+  - You may ONLY proceed to Stage 3 (`coding-plan`) upon receiving an explicit message starting with `[GATE_APPROVED] specification.md:` from `coding-specify`.
+  - If receiving `[GATE_REJECTED] specification.md:`, route the user feedback back to `coding-clarify`.
 
 ### Stage 3: Planning (`coding-plan`)
 - **Action**: Spawn `coding-plan` with the approved specification:
@@ -65,9 +67,11 @@ coding-clarify ──> coding-specify ──> coding-plan ──> coding-develop
       Prompt=f"Generate multi-repo implementation plan.md for: {specification_content}"
   )
   ```
-- **Approval Gate**: `coding-plan` writes `plan.md` and awaits user approval:
-  - If the user **approves**: proceed to Stage 4 (`coding-develop`).
-  - If the user **rejects or provides feedback**: route back to `coding-clarify`.
+- **Approval Gate**: `coding-plan` writes `plan.md` (with `RequestFeedback=True`) as its sole and final tool call, then enters the `idle` state awaiting human review.
+- **IDLE GUARD**: When Antigravity notifies `Subagent <id> has gone idle`, **DO NOT proceed to Stage 4!** Terminate your turn immediately without calling any tools, and remain idle.
+- **Stage Advancement**:
+  - You may ONLY proceed to Stage 4 (`coding-develop`) upon receiving an explicit message starting with `[GATE_APPROVED] plan.md:` from `coding-plan`.
+  - If receiving `[GATE_REJECTED] plan.md:`, route the user feedback back to `coding-clarify`.
 
 ### Stage 4: Isolated Development (`coding-develop`)
 - **Action**: For each target repository in the plan, spawn a separate `coding-develop` worker in parallel:
@@ -102,6 +106,25 @@ coding-clarify ──> coding-specify ──> coding-plan ──> coding-develop
       Prompt=f"Execute merge or open Pull Request for branches: {branch_list}"
   )
   ```
+
+## Interactive Approval Gate Protocol
+
+> [!IMPORTANT]
+> **Subagent Idle vs Approval Disambiguation**:
+> When `coding-specify` or `coding-plan` writes an artifact (`specification.md` or `plan.md`) with `RequestFeedback=True`, the subagent ends its turn and enters the `idle` state while awaiting the human user's interactive button click.
+> The Antigravity platform will automatically notify you: `Subagent <id> has gone idle`.
+>
+> **DO NOT proceed to the next stage when receiving `Subagent <id> has gone idle`!**
+> A subagent entering `idle` is NOT an indication of stage approval or completion. It means the subagent is waiting for the user to review the artifact.
+>
+> When you receive a `has gone idle` notification from `coding-specify` or `coding-plan`:
+> 1. Do NOT invoke any subagent (e.g., do not invoke `coding-plan` or `coding-develop`).
+> 2. Do NOT run commands or modify files.
+> 3. Terminate your turn immediately without calling tools, and remain idle.
+>
+> **Stage Progression & Gate Messages**:
+> - You may ONLY proceed to Stage 3 or Stage 4 when the subagent sends an explicit message starting with `[GATE_APPROVED]` (e.g. `[GATE_APPROVED] specification.md: ...` or `[GATE_APPROVED] plan.md: ...`).
+> - If receiving `[GATE_REJECTED]`, route user comments and feedback back to `coding-clarify` to resume the clarification loop.
 
 ## Concurrency Rules
 - Only **one** coding workflow runs at a time.

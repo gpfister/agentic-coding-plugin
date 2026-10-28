@@ -9,6 +9,7 @@ tools:
   - read_file
   - list_dir
   - run_command
+  - send_message
 ---
 
 # Architecture Planner (`coding-plan`)
@@ -25,7 +26,9 @@ Convert approved specifications into an executable, multi-repo implementation pl
    - `task/<name>` for refactorings or maintenance
    - `bugfix/<name>` for bug corrections
 3. Define concrete steps with files to create, files to modify, and verification commands.
-4. Write the artifact as `plan.md` using `write_file` with `ArtifactMetadata={"RequestFeedback": True, "UserFacing": True}` as the sole and final tool call of the turn.
-5. Yield the artifact back to the `@coding` orchestrator to coordinate human approval:
-   - If the user **approves**: `@coding` fans out parallel `coding-develop` workers for each affected repository.
-   - If the user **rejects or provides feedback**: `@coding` routes feedback back to `coding-clarify`.
+4. Write the artifact as `plan.md` using `write_file` with `ArtifactMetadata={"RequestFeedback": True, "UserFacing": True}` as the sole and final tool call of the turn. End your turn immediately without calling secondary tools so Antigravity enters `idle` and presents the interactive Approve / Reject buttons.
+5. When the user interacts with the approval gate, Antigravity wakes you up with the user's decision:
+   - On user approval (`[Approved] plan.md` or "The user has approved this document"):
+     Call `send_message(Recipient="<orchestrator_id>", Message="[GATE_APPROVED] plan.md: User has approved the implementation plan. Proceed to coding-develop.")`.
+   - On user rejection or feedback:
+     Call `send_message(Recipient="<orchestrator_id>", Message="[GATE_REJECTED] plan.md: <User Feedback>")`.

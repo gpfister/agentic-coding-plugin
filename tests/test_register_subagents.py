@@ -129,8 +129,10 @@ def test_build_session_guidance():
     assert "plan.md" in guidance
     assert "RequestFeedback" in guidance
     assert "sole and final tool call" in guidance
-    assert "[Approved]" in guidance
-    assert "[Rejected]" in guidance
+    assert "[GATE_APPROVED]" in guidance
+    assert "[GATE_REJECTED]" in guidance
+    assert "has gone idle" in guidance
+    assert "Idle vs Approval Disambiguation Guard" in guidance
 
 
 def test_register_subagents_cli():
@@ -139,7 +141,7 @@ def test_register_subagents_cli():
         "workspacePaths": [str(PLUGIN_ROOT)],
     }
     proc = subprocess.run(
-        ["uv", "run", "hooks/register_subagents.py"],
+        [sys.executable, "hooks/register_subagents.py"],
         cwd=str(PLUGIN_ROOT),
         input=json.dumps(input_payload),
         text=True,

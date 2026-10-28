@@ -48,8 +48,8 @@ Subagents are discovered dynamically and registered via `define_subagent` (or `d
 | :--- | :--- | :---: | :---: | :---: | :--- | :--- |
 | **`@coding`** | [`agents/coding/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding/) | `True` | `True` | `True` | `invoke_subagent`, `send_message`, `manage_subagents`, `ask_question`, `read_file`, `list_dir`, `run_command` | 6-stage lifecycle pipeline orchestration |
 | **`@coding-clarify`** | [`agents/coding-clarify/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-clarify/) | `False` | `False` | `True` | `ask_question`, `read_file`, `list_dir`, `search_web` | One-question-at-a-time requirement interrogation |
-| **`@coding-specify`** | [`agents/coding-specify/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-specify/) | `True` | `False` | `True` | `write_file`, `read_file`, `list_dir`, `search_web` | Specification authoring & interactive approval gate |
-| **`@coding-plan`** | [`agents/coding-plan/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-plan/) | `True` | `False` | `True` | `write_file`, `read_file`, `list_dir`, `run_command` | Multi-repo task breakdown & branch planning |
+| **`@coding-specify`** | [`agents/coding-specify/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-specify/) | `True` | `False` | `True` | `write_file`, `read_file`, `list_dir`, `search_web`, `send_message` | Specification authoring & interactive approval gate |
+| **`@coding-plan`** | [`agents/coding-plan/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-plan/) | `True` | `False` | `True` | `write_file`, `read_file`, `list_dir`, `run_command`, `send_message` | Multi-repo task breakdown & branch planning |
 | **`@coding-develop`** | [`agents/coding-develop/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-develop/) | `True` | `False` | `True` | `read_file`, `write_file`, `edit_file`, `list_dir`, `run_command`, `search_web` | Isolated repo implementation, tests, linting, docs |
 | **`@coding-review`** | [`agents/coding-review/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-review/) | `True` | `False` | `True` | `read_file`, `list_dir`, `run_command`, `ask_question` | Deliverables verification against specification |
 | **`@coding-merge`** | [`agents/coding-merge/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-merge/) | `True` | `False` | `True` | `run_command`, `read_file`, `list_dir`, `ask_question` | Local branch merge or GitHub Pull Request (`gh pr create`) |
@@ -81,14 +81,20 @@ coding-clarify ──> coding-specify ──> coding-plan ──> coding-develop
 ### Stage 2: Specification (`coding-specify`)
 - **Objective**: Author a comprehensive, verifiable technical specification document (`specification.md`).
 - **Contents**: Problem motivation, functional requirements, non-functional requirements, affected repositories, test contracts, and edge-case mitigations.
-- **Interactive Approval Gate**: Requires user approval via Antigravity's interactive modal before proceeding.
+- **Interactive Approval Gate & Idle Guard**:
+  - `coding-specify` writes `specification.md` with `RequestFeedback=True` as its sole and final tool call, then enters the `idle` state.
+  - When Antigravity notifies `Subagent <id> has gone idle`, `@coding` must **halt and remain idle** without invoking subagents.
+  - `@coding` advances to Stage 3 (`coding-plan`) **only** upon receiving an explicit `[GATE_APPROVED] specification.md:` message from `coding-specify`.
 
 ### Stage 3: Planning (`coding-plan`)
 - **Objective**: Deconstruct the approved specification into atomic, verifiable steps and determine git branch names (`plan.md`).
 - **Multi-Repository Isolation**:
   - Assigns work strictly per repository (respecting workspace boundaries).
   - Branch conventions: `feature/<name>` (new capabilities), `task/<name>` (maintenance/refactoring), `bugfix/<name>` (bug fixes).
-- **Interactive Approval Gate**: Requires user approval via Antigravity's interactive modal before starting development.
+- **Interactive Approval Gate & Idle Guard**:
+  - `coding-plan` writes `plan.md` with `RequestFeedback=True` as its sole and final tool call, then enters the `idle` state.
+  - When Antigravity notifies `Subagent <id> has gone idle`, `@coding` must **halt and remain idle** without invoking subagents.
+  - `@coding` advances to Stage 4 (`coding-develop`) **only** upon receiving an explicit `[GATE_APPROVED] plan.md:` message from `coding-plan`.
 
 ### Stage 4: Development (`coding-develop`)
 - **Objective**: Implement required code changes, tests, linters, documentation, and CI/CD updates.
@@ -144,7 +150,14 @@ Artifacts requiring human confirmation (`specification.md`, `plan.md`) must trig
 3. **Sole & Final Tool Call Rule (CRITICAL)**:
    - To trigger the interactive modal, `write_file(..., RequestFeedback=True)` MUST be the **sole and final tool call of that turn**.
    - Never batch secondary tool calls (e.g. running shell commands, writing Obsidian notes, sending messages) in the same turn.
-   - Stop calling tools immediately after writing the artifact to yield the turn to the user.
-4. **Handling Feedback**:
-   - `[Approved] <artifact>.md`: Advance immediately to the next stage.
-   - `[Rejected] <artifact>.md`: Re-route user comments back to the authoring subagent to adjust scope and re-synthesize.
+   - Stop calling tools immediately after writing the artifact to yield the turn to the user and enter the `idle` state.
+4. **Subagent Idle vs Approval Disambiguation Guard**:
+   - When a gatekeeper subagent (`coding-specify` or `coding-plan`) writes an artifact and enters `idle`, Antigravity notifies the orchestrator: `Subagent <id> has gone idle`.
+   - **DO NOT proceed to the next stage upon receiving `Subagent <id> has gone idle`!** The orchestrator must terminate its turn without calling any tools and remain idle.
+5. **Handling User Decisions & Gate Messages**:
+   - On interactive approval (`[Approved] <artifact>.md`), the subagent sends:
+     `send_message(Recipient="<orchestrator_id>", Message="[GATE_APPROVED] <artifact>.md: ...")`
+     The orchestrator then advances to the subsequent stage (`coding-plan` after `specification.md`, `coding-develop` after `plan.md`).
+   - On interactive rejection or comments (`[Rejected] <artifact>.md`), the subagent sends:
+     `send_message(Recipient="<orchestrator_id>", Message="[GATE_REJECTED] <artifact>.md: <User Feedback>")`
+     The orchestrator routes feedback back to `coding-clarify` to resume the clarification loop.
