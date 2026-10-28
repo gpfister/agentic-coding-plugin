@@ -1,6 +1,6 @@
 # Contributing to agentic-coding-plugin
 
-Thank you for your interest in contributing to **`agentic-coding-plugin`**! This plugin is the primary coding companion within the `agentic` workspace, providing declarative markdown-defined subagents, progressive-disclosure skills, automated lifecycle hooks (`SessionStart`, `PreInvocation` Laya Router System 1 prompt triage), and clean engineering standards for Google Antigravity.
+Thank you for your interest in contributing to **`agentic-coding-plugin`**! This plugin is the primary coding companion within the `agentic` workspace, providing declarative markdown-defined subagents, progressive-disclosure skills, automated lifecycle hooks (`SessionStart`), and clean engineering standards for Google Antigravity.
 
 Please review this document to understand our development workflows, code standards, and submission guidelines.
 
@@ -50,8 +50,7 @@ agentic-coding-plugin/
 │   ├── coding/         # Stage orchestrator (@coding)
 │   └── coding-*/       # Worker subagents (clarify, specify, plan, develop, review, merge)
 ├── hooks/              # Scripted lifecycle hooks executed via uv run
-│   ├── register_subagents.py # SessionStart: registers subagents & guidance
-│   └── prompt_triage.py      # PreInvocation: Laya Router System 1 intent classifier
+│   └── register_subagents.py # SessionStart: registers subagents & guidance
 ├── hooks.json          # Lifecycle hook definitions
 ├── plugin.json         # Plugin manifest
 ├── pyproject.toml      # Project configuration and uv dependencies
@@ -107,10 +106,9 @@ agentic-coding-plugin/
 
 ### 4.5 Modifying Lifecycle Hooks
 - `hooks/register_subagents.py`: Executes on `SessionStart`. Must output valid JSON `{"injectSteps": [...]}` to stdout.
-- `hooks/prompt_triage.py`: Executes on `PreInvocation` at `invocationNum == 0`. Strips XML wrapper tags and classifies prompts into 5 responses via Laya Router.
 - Verify changes with:
   ```bash
-  .venv/bin/pytest tests/test_prompt_triage.py -v
+  .venv/bin/pytest tests/test_register_subagents.py -v
   ```
 
 ---

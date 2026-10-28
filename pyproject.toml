@@ -8,10 +8,7 @@ authors = [
     { name = "Greg PFISTER", email = "gregory.pfister@gmail.com" }
 ]
 requires-python = ">=3.11"
-dependencies = [
-    "laya>=0.4.15",
-    "pydantic>=2.10.0",
-]
+dependencies = []
 
 [dependency-groups]
 dev = [
