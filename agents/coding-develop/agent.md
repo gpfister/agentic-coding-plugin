@@ -8,9 +8,7 @@ tools:
   - read_file
   - write_file
   - edit_file
-  - create_file
   - list_dir
-  - search_dir
   - run_command
   - search_web
 ---

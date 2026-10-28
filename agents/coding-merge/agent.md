@@ -8,7 +8,6 @@ tools:
   - run_command
   - read_file
   - list_dir
-  - search_dir
   - ask_question
 ---
 

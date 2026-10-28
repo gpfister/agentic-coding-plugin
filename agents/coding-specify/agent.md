@@ -8,7 +8,6 @@ tools:
   - write_file
   - read_file
   - list_dir
-  - search_dir
   - search_web
 ---
 

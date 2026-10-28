@@ -7,7 +7,6 @@ enable_mcp_tools: true
 tools:
   - read_file
   - list_dir
-  - search_dir
   - run_command
   - ask_question
 ---

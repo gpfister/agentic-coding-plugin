@@ -8,7 +8,6 @@ tools:
   - ask_question
   - read_file
   - list_dir
-  - search_dir
   - search_web
 ---
 
