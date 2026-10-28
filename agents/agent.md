@@ -1,6 +1,12 @@
 ---
-name: agent
+name: coding-catalog
 description: Subagent architecture, registry catalog, and 6-stage software development lifecycle workflow guide.
+enable_write_tools: false
+enable_subagent_tools: false
+enable_mcp_tools: false
+tools:
+  - read_file
+  - list_dir
 ---
 
 # Agentic Coding Subagents & Workflow (`agents/agent.md`)
@@ -11,7 +17,7 @@ This document defines the subagent architecture, the registry of specialized wor
 
 ## 1. Architectural Overview
 
-The `agentic-coding-plugin` organizes agent capabilities into modular, declarative, markdown-defined subagents. Rather than burdening a single agent with every phase of the software engineering lifecycle, the plugin partitions tasks across specialized subagents invoked via `invoke_subagent`.
+The `agentic-coding-plugin` organizes agent capabilities into modular, declarative, markdown-defined subagents. Rather than burdening a single agent with every phase of the software engineering lifecycle, the plugin partitions tasks across specialized subagents coordinated by the `@coding` orchestrator.
 
 ### 1.1 Directory Structure
 Each subagent resides in its own isolated directory under `agents/<agent>/` containing its markdown definition:
@@ -38,15 +44,15 @@ agents/
 ### 1.2 Subagent Registration & Tool Privilege Model
 Subagents are discovered dynamically and registered via `define_subagent` (or `define_agent`):
 
-| Agent Handle | Directory | `enable_write_tools` | `enable_subagent_tools` | `enable_mcp_tools` | Primary Responsibility |
-| :--- | :--- | :---: | :---: | :---: | :--- |
-| **`@coding`** | [`agents/coding/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding/) | `True` | `True` | `True` | 6-stage lifecycle pipeline orchestration |
-| **`@coding-clarify`** | [`agents/coding-clarify/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-clarify/) | `True` | `False` | `True` | One-question-at-a-time requirement interrogation |
-| **`@coding-specify`** | [`agents/coding-specify/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-specify/) | `True` | `False` | `True` | Specification authoring & interactive approval gate |
-| **`@coding-plan`** | [`agents/coding-plan/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-plan/) | `True` | `False` | `True` | Multi-repo task breakdown & branch planning |
-| **`@coding-develop`** | [`agents/coding-develop/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-develop/) | `True` | `False` | `True` | Isolated repo implementation, tests, linting, docs |
-| **`@coding-review`** | [`agents/coding-review/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-review/) | `True` | `False` | `True` | Deliverables verification against specification |
-| **`@coding-merge`** | [`agents/coding-merge/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-merge/) | `True` | `False` | `True` | Local branch merge or GitHub Pull Request (`gh pr create`) |
+| Agent Handle | Directory | `enable_write_tools` | `enable_subagent_tools` | `enable_mcp_tools` | Allowed Tools | Primary Responsibility |
+| :--- | :--- | :---: | :---: | :---: | :--- | :--- |
+| **`@coding`** | [`agents/coding/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding/) | `True` | `True` | `True` | `invoke_subagent`, `send_message`, `manage_subagents`, `ask_question`, `read_file`, `list_dir`, `search_dir`, `run_command` | 6-stage lifecycle pipeline orchestration |
+| **`@coding-clarify`** | [`agents/coding-clarify/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-clarify/) | `False` | `False` | `True` | `ask_question`, `read_file`, `list_dir`, `search_dir`, `search_web` | One-question-at-a-time requirement interrogation |
+| **`@coding-specify`** | [`agents/coding-specify/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-specify/) | `True` | `False` | `True` | `write_file`, `read_file`, `list_dir`, `search_dir`, `search_web` | Specification authoring & interactive approval gate |
+| **`@coding-plan`** | [`agents/coding-plan/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-plan/) | `True` | `False` | `True` | `write_file`, `read_file`, `list_dir`, `search_dir`, `run_command` | Multi-repo task breakdown & branch planning |
+| **`@coding-develop`** | [`agents/coding-develop/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-develop/) | `True` | `False` | `True` | `read_file`, `write_file`, `edit_file`, `create_file`, `list_dir`, `search_dir`, `run_command`, `search_web` | Isolated repo implementation, tests, linting, docs |
+| **`@coding-review`** | [`agents/coding-review/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-review/) | `True` | `False` | `True` | `read_file`, `list_dir`, `search_dir`, `run_command`, `ask_question` | Deliverables verification against specification |
+| **`@coding-merge`** | [`agents/coding-merge/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-merge/) | `True` | `False` | `True` | `run_command`, `read_file`, `list_dir`, `search_dir`, `ask_question` | Local branch merge or GitHub Pull Request (`gh pr create`) |
 
 ---
 
@@ -70,7 +76,7 @@ coding-clarify ──> coding-specify ──> coding-plan ──> coding-develop
   - Never ask open-ended or bundled batches of questions. Always ask **one question at a time** via `ask_question`.
   - For each question provide: why the decision matters, concrete options, a recommended option prefixed with `(Recommended)`, and the technical rationale.
   - **Inspect First Rule**: Check existing codebase files before asking questions that can be answered from inspection.
-- **Handoff**: Concludes with structured `ClarificationSummary` JSON transferred to `coding-specify`.
+- **Handoff**: Concludes with structured `ClarificationSummary` JSON transferred back to `@coding` to transition to `coding-specify`.
 
 ### Stage 2: Specification (`coding-specify`)
 - **Objective**: Author a comprehensive, verifiable technical specification document (`specification.md`).
@@ -90,12 +96,12 @@ coding-clarify ──> coding-specify ──> coding-plan ──> coding-develop
 - **Quality Mandates**:
   - Run all unit and integration tests; verify 100% clean passes.
   - Preserve all existing comments and docstrings unrelated to code changes.
-  - Output structured `DevelopReport` JSON summarizing modified files and test outputs.
+  - Output structured `DevelopReport` JSON summarizing modified files and test outputs back to `@coding`.
 
 ### Stage 5: Review (`coding-review`)
 - **Objective**: Validate all deliverables against the original specification and verify cross-repo contract compatibility.
 - **Discrepancy Routing**:
-  - If regressions or specification discrepancies are found: Route issues back to `coding-plan` with actionable feedback.
+  - If regressions or specification discrepancies are found: Route issues back to `coding-plan` via `@coding` with actionable feedback.
   - If approved: Present validation summary to the user and request confirmation to proceed to merge.
 
 ### Stage 6: Merge & Release (`coding-merge`)

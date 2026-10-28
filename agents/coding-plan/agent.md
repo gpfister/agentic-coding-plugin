@@ -1,6 +1,15 @@
 ---
 name: coding-plan
 description: Multi-repository architecture planner breaking down specifications into atomic steps and branches.
+enable_write_tools: true
+enable_subagent_tools: false
+enable_mcp_tools: true
+tools:
+  - write_file
+  - read_file
+  - list_dir
+  - search_dir
+  - run_command
 ---
 
 # Architecture Planner (`coding-plan`)
@@ -17,21 +26,7 @@ Convert approved specifications into an executable, multi-repo implementation pl
    - `task/<name>` for refactorings or maintenance
    - `bugfix/<name>` for bug corrections
 3. Define concrete steps with files to create, files to modify, and verification commands.
-4. Write the artifact as `plan.md` using `write_file` with `RequestFeedback=true`.
-5. Wait in the background for user feedback:
-   - **User Approves**: Fan out parallel `coding-develop` workers for each affected repository:
-     ```python
-     invoke_subagent(
-         TypeName="coding-develop",
-         Role=f"Software Engineer ({repo_name})",
-         Prompt=f"Execute implementation for {repo_name} on branch {branch_name} as detailed in plan.md"
-     )
-     ```
-   - **User Rejects or Provides Feedback**: Route feedback back to `coding-clarify`:
-     ```python
-     invoke_subagent(
-         TypeName="coding-clarify",
-         Role="Requirement Clarifier",
-         Prompt=f"Re-clarify requirements based on plan feedback: {feedback}"
-     )
-     ```
+4. Write the artifact as `plan.md` using `write_file` with `ArtifactMetadata={"RequestFeedback": True, "UserFacing": True}` as the sole and final tool call of the turn.
+5. Yield the artifact back to the `@coding` orchestrator to coordinate human approval:
+   - If the user **approves**: `@coding` fans out parallel `coding-develop` workers for each affected repository.
+   - If the user **rejects or provides feedback**: `@coding` routes feedback back to `coding-clarify`.

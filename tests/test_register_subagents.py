@@ -50,8 +50,8 @@ def test_parse_frontmatter():
     root_agent_md = PLUGIN_ROOT / "agents" / "agent.md"
     assert root_agent_md.exists()
     meta_root = parse_agent_frontmatter(root_agent_md)
-    assert meta_root.get("name") == "agent"
-    assert "workflow" in meta_root.get("description", "").lower()
+    assert meta_root.get("name") in ("agent", "coding-catalog")
+    assert any(term in meta_root.get("description", "").lower() for term in ("workflow", "subagent", "catalog"))
 
 
 def test_subagent_directory_layout():

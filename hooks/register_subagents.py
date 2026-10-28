@@ -114,10 +114,11 @@ def register_agents() -> list[dict[str, Any]]:
         content = md_file.read_text(encoding="utf-8")
         body = re.sub(r"^---\s*\n.*?\n---\s*\n?", "", content, flags=re.DOTALL).strip()
 
-        # Coding orchestrator requires subagent tools to invoke worker subagents
-        is_orchestrator = name in ("coding", "agent")
-        enable_write = True
-        enable_subagents = is_orchestrator
+        # Use frontmatter permissions if declared, otherwise fall back to role defaults
+        enable_write = meta.get("enable_write_tools", "true").lower() == "true"
+        default_subagents = "true" if name in ("coding", "agent", "coding-catalog") else "false"
+        enable_subagents = meta.get("enable_subagent_tools", default_subagents).lower() == "true"
+        enable_mcp = meta.get("enable_mcp_tools", "true").lower() == "true"
 
         agent_spec = define_agent(
             name=name,
@@ -125,7 +126,7 @@ def register_agents() -> list[dict[str, Any]]:
             system_prompt=body,
             enable_write_tools=enable_write,
             enable_subagent_tools=enable_subagents,
-            enable_mcp_tools=True,
+            enable_mcp_tools=enable_mcp,
         )
         registered.append(agent_spec)
 
@@ -173,8 +174,9 @@ def build_session_guidance(
         "Subagent Registration & Orchestration Protocol:",
         "1. **Agent Registration & Permissions**:",
         "   - The main agent must register `@coding` and worker subagents using `define_subagent` (or `define_agent`) before spawning them to grant required tool privileges.",
-        "   - `@coding`: Orchestrator requiring `enable_write_tools=True` and `enable_subagent_tools=True`.",
-        "   - Worker Subagents (`@coding-clarify`, `@coding-specify`, `@coding-plan`, `@coding-develop`, `@coding-review`, `@coding-merge`): Require `enable_write_tools=True` so they can author artifacts, edit code, and manage branches directly.",
+        "   - `@coding`: Orchestrator requiring `enable_write_tools=False`, `enable_subagent_tools=True`, and `enable_mcp_tools=True`.",
+        "   - `@coding-clarify`: Requirement interrogator requiring read-only tools (`enable_write_tools=False`, `enable_subagent_tools=False`, `enable_mcp_tools=True`).",
+        "   - Worker Subagents (`@coding-specify`, `@coding-plan`, `@coding-develop`, `@coding-review`, `@coding-merge`): Require `enable_write_tools=True` so they can author artifacts, edit code, execute test suites, and manage branches directly.",
         "2. **Spawning Subagents**: Use `invoke_subagent` to spawn `@coding` (TypeName='coding').",
         "3. **Sequential Phase Handoffs**: Coordinate the 6-stage lifecycle:",
         "   - `coding-clarify` -> `coding-specify` -> `coding-plan` -> `coding-develop` (parallel per repo) -> `coding-review` -> `coding-merge`.",

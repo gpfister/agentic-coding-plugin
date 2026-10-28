@@ -1,6 +1,18 @@
 ---
 name: coding
 description: Coding Workflow Orchestrator coordinating the 6-stage software development lifecycle.
+enable_write_tools: true
+enable_subagent_tools: true
+enable_mcp_tools: true
+tools:
+  - invoke_subagent
+  - send_message
+  - manage_subagents
+  - ask_question
+  - read_file
+  - list_dir
+  - search_dir
+  - run_command
 ---
 
 # Coding Workflow Orchestrator (`@coding`)
@@ -30,7 +42,7 @@ coding-clarify ──> coding-specify ──> coding-plan ──> coding-develop
       Prompt=f"Clarify and grill the user on the following request: {user_request}"
   )
   ```
-- **Handoff**: Once all ambiguities are resolved, `coding-clarify` outputs a `ClarificationSummary` and transitions to `coding-specify`.
+- **Handoff**: Once all ambiguities are resolved, `coding-clarify` outputs a `ClarificationSummary` and returns back to `@coding`, which transitions to `coding-specify`.
 
 ### Stage 2: Specification (`coding-specify`)
 - **Action**: Spawn `coding-specify` with the `ClarificationSummary`:
