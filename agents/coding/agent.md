@@ -26,56 +26,67 @@ You do not write application code directly. Instead, you orchestrate specialized
 
 ```mermaid
 flowchart TD
-    Start(["User Request / Task"]) --> Phase1["Phase 1: Clarification<br/>(@coding-clarify)"]
+    %% Top Entrypoint
+    Start(["User Request / Task"]) --> P1["Phase 1: Clarification<br/>(@coding-clarify)"]
     
-    Phase1 --> AmbiguityCheck{"Ambiguities or<br/>Open Questions?"}
+    %% Phase 1: Clarification
+    P1 --> AmbiguityCheck{"Ambiguities or<br/>Open Questions?"}
     AmbiguityCheck -->|"Yes"| GrillUser["Interrogate User via ask_question<br/>(One question at a time)"]
-    GrillUser --> AmbiguityCheck
-    AmbiguityCheck -->|"No / Clarified"| DocAfterPhase1{"agentic-document-plugin<br/>(or agentic-obsidian-plugin)<br/>installed?"}
-    DocAfterPhase1 -->|"Yes"| InvokeDoc1["Invoke @coding-document<br/>(Document requirements & clarification notes)"]
-    DocAfterPhase1 -->|"No"| Phase2["Phase 2: Specification<br/>(@coding-specify)"]
-    InvokeDoc1 --> Phase2
-    
-    Phase2 --> SpecArtifact["Write specification.md<br/>(RequestFeedback=True, sole tool call)"]
-    SpecArtifact --> IdleGuardSpec["Enter IDLE State<br/>(Wait for User Gate Decision)"]
-    IdleGuardSpec --> UserSpecGate{"User Decision on<br/>specification.md?"}
-    UserSpecGate -->|"[GATE_REJECTED]"| Phase1
-    UserSpecGate -->|"[GATE_APPROVED]"| DocAfterPhase2{"agentic-document-plugin<br/>installed?"}
-    DocAfterPhase2 -->|"Yes"| InvokeDoc2["Invoke @coding-document<br/>(Document & index feature specifications)"]
-    DocAfterPhase2 -->|"No"| Phase3["Phase 3: Planning<br/>(@coding-plan)"]
-    InvokeDoc2 --> Phase3
-    
-    Phase3 --> PlanArtifact["Write plan.md<br/>(RequestFeedback=True, sole tool call)"]
-    PlanArtifact --> IdleGuardPlan["Enter IDLE State<br/>(Wait for User Gate Decision)"]
-    IdleGuardPlan --> UserPlanGate{"User Decision on<br/>plan.md?"}
-    UserPlanGate -->|"[GATE_REJECTED]"| Phase1
-    UserPlanGate -->|"[GATE_APPROVED]"| DocAfterPhase3{"agentic-document-plugin<br/>installed?"}
-    DocAfterPhase3 -->|"Yes"| InvokeDoc3["Invoke @coding-document<br/>(Document architecture plan & ADRs)"]
-    DocAfterPhase3 -->|"No"| Phase4["Phase 4: Development<br/>(@coding-develop)"]
-    InvokeDoc3 --> Phase4
-    
-    Phase4 --> ParallelDev["Fan out parallel workers<br/>per repo on isolated branches"]
+    GrillUser --> P1
+    AmbiguityCheck -->|"No / Clarified"| Doc1Check{"agentic-document-plugin<br/>(or agentic-obsidian-plugin)<br/>installed?"}
+    Doc1Check -->|"Yes"| InvokeDoc1["Invoke @coding-document<br/>(Document requirements & clarification notes)"]
+    Doc1Check -->|"No"| P2["Phase 2: Specification<br/>(@coding-specify)"]
+    InvokeDoc1 --> P2
+
+    %% Phase 2: Specification
+    P2 --> SpecArtifact["Write specification.md<br/>(RequestFeedback=True, sole tool call)"]
+    SpecArtifact --> IdleSpec["Enter IDLE State<br/>(Wait for User Gate Decision)"]
+    IdleSpec --> SpecGate{"User Decision on<br/>specification.md?"}
+    SpecGate -->|"[GATE_APPROVED]"| Doc2Check{"agentic-document-plugin<br/>installed?"}
+    Doc2Check -->|"Yes"| InvokeDoc2["Invoke @coding-document<br/>(Document & index feature specifications)"]
+    Doc2Check -->|"No"| P3["Phase 3: Planning<br/>(@coding-plan)"]
+    InvokeDoc2 --> P3
+
+    %% Phase 3: Planning
+    P3 --> PlanArtifact["Write plan.md<br/>(RequestFeedback=True, sole tool call)"]
+    PlanArtifact --> IdlePlan["Enter IDLE State<br/>(Wait for User Gate Decision)"]
+    IdlePlan --> PlanGate{"User Decision on<br/>plan.md?"}
+    PlanGate -->|"[GATE_APPROVED]"| Doc3Check{"agentic-document-plugin<br/>installed?"}
+    Doc3Check -->|"Yes"| InvokeDoc3["Invoke @coding-document<br/>(Document architecture plan & ADRs)"]
+    Doc3Check -->|"No"| P4["Phase 4: Development<br/>(@coding-develop)"]
+    InvokeDoc3 --> P4
+
+    %% Phase 4: Development
+    P4 --> ParallelDev["Fan out parallel workers<br/>per repo on isolated branches"]
     ParallelDev --> DevWork["Implement code, tests, linting<br/>Return DevelopReport"]
-    DevWork --> DocAfterPhase4{"agentic-document-plugin<br/>installed?"}
-    DocAfterPhase4 -->|"Yes"| InvokeDoc4["Invoke @coding-document<br/>(Document code changes & implementation notes)"]
-    DocAfterPhase4 -->|"No"| Phase5["Phase 5: Review<br/>(@coding-review)"]
-    InvokeDoc4 --> Phase5
-    
-    Phase5 --> AuditChanges["Audit deliverables against spec<br/>Run verification test suites"]
+    DevWork --> Doc4Check{"agentic-document-plugin<br/>installed?"}
+    Doc4Check -->|"Yes"| InvokeDoc4["Invoke @coding-document<br/>(Document code changes & implementation notes)"]
+    Doc4Check -->|"No"| P5["Phase 5: Review<br/>(@coding-review)"]
+    InvokeDoc4 --> P5
+
+    %% Phase 5: Review
+    P5 --> AuditChanges["Audit deliverables against spec<br/>Run verification test suites"]
     AuditChanges --> ReviewCheck{"Quality Audit<br/>Passed?"}
-    ReviewCheck -->|"Defects Found"| Phase3
-    ReviewCheck -->|"Passed"| ConfirmMergeGate{"Confirm Merge with User<br/>(ask_question)"}
-    ConfirmMergeGate -->|"User Denied"| AbortWorkflow(["Abort / Terminate"])
-    ConfirmMergeGate -->|"User Confirmed"| DocAfterPhase5{"agentic-document-plugin<br/>installed?"}
-    DocAfterPhase5 -->|"Yes"| InvokeDoc5["Invoke @coding-document<br/>(Pre-merge tidy-up: update READMEs & architecture docs)"]
-    DocAfterPhase5 -->|"No"| Phase6["Phase 6: Merge & Release<br/>(@coding-merge)"]
-    InvokeDoc5 --> Phase6
-    
-    Phase6 --> ExecMerge["Execute git merge or open GitHub PR"]
-    ExecMerge --> DocAfterPhase6{"agentic-document-plugin<br/>installed?"}
-    DocAfterPhase6 -->|"Yes"| InvokeDoc6["Invoke @coding-document<br/>(Post-merge: update git status, branch tracking & changelogs)"]
-    DocAfterPhase6 -->|"No"| Complete(["Workflow Completed"])
+    ReviewCheck -->|"Passed"| MergeConfirmGate{"Confirm Merge with User<br/>(ask_question)"}
+    MergeConfirmGate -->|"User Confirmed"| Doc5Check{"agentic-document-plugin<br/>installed?"}
+    Doc5Check -->|"Yes"| InvokeDoc5["Invoke @coding-document<br/>(Pre-merge tidy-up: update READMEs & architecture docs)"]
+    Doc5Check -->|"No"| P6["Phase 6: Merge & Release<br/>(@coding-merge)"]
+    InvokeDoc5 --> P6
+
+    %% Phase 6: Release & Merge
+    P6 --> ExecMerge["Execute git merge or open GitHub PR"]
+    ExecMerge --> Doc6Check{"agentic-document-plugin<br/>installed?"}
+    Doc6Check -->|"Yes"| InvokeDoc6["Invoke @coding-document<br/>(Post-merge: update git status, branch tracking & changelogs)"]
+    Doc6Check -->|"No"| Complete(["Workflow Completed"])
     InvokeDoc6 --> Complete
+
+    %% Rejection & Rework Loops (routing upward)
+    SpecGate -->|"[GATE_REJECTED]"| P1
+    PlanGate -->|"[GATE_REJECTED]"| P1
+    ReviewCheck -->|"Defects Found"| P3
+
+    %% User Denied Merge routes directly to bottom termination
+    MergeConfirmGate -->|"User Denied"| AbortWorkflow(["Abort / Terminate"])
 ```
 
 ### Stage 1: Clarification (`coding-clarify`)
