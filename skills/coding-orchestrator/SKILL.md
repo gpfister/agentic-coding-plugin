@@ -31,8 +31,12 @@ The `coding` subagent guides software requests through a rigorous, multi-agent d
 5. **`coding-review`**:
    - Collects all develop reports. Confirms cross-repo consistency and spec compliance.
    - If defects found, loops back to `coding-plan`. If approved, asks user for merge confirmation.
-6. **`coding-merge`**:
+6. **`coding-document` (Pre-Merge Tidy Up)**:
+   - If `agentic-obsidian-plugin` is installed, `@coding` invokes `@coding-document` prior to merging to tidy up project and feature documentation, architecture diagrams, and ADRs.
+7. **`coding-merge`**:
    - Automatically merges locally or opens a Pull Request with `gh` if remote exists.
+8. **`coding-document` (Post-Merge Git Status)**:
+   - If `agentic-obsidian-plugin` is installed, `@coding` invokes `@coding-document` at the end to update git status, branch states, and changelogs in the Obsidian vault.
 
 ## Interactive Approval Gate & Idle Guard Protocol
 

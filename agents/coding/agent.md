@@ -29,7 +29,13 @@ coding-clarify ──> coding-specify ──> coding-plan ──> coding-develop
                           └───────────────┴────────────── coding-review
                                                                  │ (approved)
                                                                  ▼
+                                                  [coding-document (pre-merge tidy)]
+                                                                 │
+                                                                 ▼
                                                            coding-merge
+                                                                 │
+                                                                 ▼
+                                                  [coding-document (post-merge git status)]
 ```
 
 ### Stage 1: Clarification (`coding-clarify`)
@@ -97,6 +103,17 @@ coding-clarify ──> coding-specify ──> coding-plan ──> coding-develop
   - If discrepancies or broken contracts are found: invoke `coding-plan` with discrepancy details.
   - If all checks pass: ask user for merge confirmation.
 
+### Pre-Merge Documentation Step (`coding-document`)
+- **Action**: When `agentic-obsidian-plugin` is available (or `@coding-document` subagent is registered), `@coding` must invoke `@coding-document` prior to executing the merge step:
+  ```python
+  invoke_subagent(
+      TypeName="coding-document",
+      Role="Documentation Specialist",
+      Prompt=f"Tidy up and synchronize all project documentation, feature specifications, architecture diagrams, and ADRs for deliverables: {develop_reports}"
+  )
+  ```
+- **General Rule**: `@coding` and all subagents should delegate all documentation tasks to `@coding-document`.
+
 ### Stage 6: Release & Merge (`coding-merge`)
 - **Action**: Upon receiving user merge confirmation, spawn `coding-merge`:
   ```python
@@ -104,6 +121,16 @@ coding-clarify ──> coding-specify ──> coding-plan ──> coding-develop
       TypeName="coding-merge",
       Role="Release Engineer",
       Prompt=f"Execute merge or open Pull Request for branches: {branch_list}"
+  )
+  ```
+
+### Post-Merge Git Status & Changelog Step (`coding-document`)
+- **Action**: When `agentic-obsidian-plugin` is available (or `@coding-document` subagent is registered), `@coding` must invoke `@coding-document` at the end of the merge step:
+  ```python
+  invoke_subagent(
+      TypeName="coding-document",
+      Role="Documentation Specialist",
+      Prompt=f"Update git repository status, branch tracking records, and release changelogs in the Obsidian vault following merge: {merge_report}"
   )
   ```
 
