@@ -35,3 +35,11 @@ This rule set applies whenever the `agentic-coding-plugin` is active in an Antig
   - **After Phase 5 (Review / Pre-Merge)**: Perform pre-merge documentation tidy-up across READMEs, architecture records, and feature specs.
   - **After Phase 6 (Merge / Post-Merge)**: Update repository git statuses (`agentic-obsidian/git-status.md`), branch topologies, and release changelogs.
 - If `agentic-document-plugin` (or `agentic-obsidian-plugin`) is not installed, skip the documentation invocation and advance directly to the subsequent phase.
+
+---
+
+## 5. Companion Subagents & Delegation
+- **Issue Investigation**: Complex root-cause diagnosis, defect tracing, and fix proposals are handled by `@coding-investigate` (`agentic-investigate-plugin`).
+- **Telemetry & Stream Surveillance**: Real-time log, container, and serial stream monitoring is handled by `@coding-monitor` (`agentic-monitoring-plugin`).
+- **Topic & Literature Research**: Deep web research, technical literature synthesis, and documentation lookups are handled by `@coding-research` (`agentic-research-plugin`).
+

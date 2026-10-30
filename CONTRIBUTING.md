@@ -116,7 +116,7 @@ agentic-coding-plugin/
 ## 5. Coding & Commit Standards
 
 - **Commit Messages**: Follow [Conventional Commits](https://www.conventionalcommits.org/):
-  - `feat(agents): add code-investigate triage rule`
+  - `feat(agents): add coding-investigate triage rule`
   - `fix(hooks): sanitize concatenated file paths in prompt triage`
   - `docs: update CONTRIBUTING.md and README.md`
   - `test(plugin): add verification for MIT license`

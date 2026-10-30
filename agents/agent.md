@@ -120,11 +120,17 @@ coding-clarify ──> coding-specify ──> coding-plan ──> coding-develop
 
 ## 3. Companion Plugins & Workflows
 
-### 3.1 Autonomous Issue Investigation (`@investigate`)
-For complex bugs, defects, test failures, or cross-repository diagnostic tasks, use the companion plugin **`agentic-investigate-plugin`** (`@investigate`), which performs autonomous root cause analysis, user interrogation, and hands off approved fixes to `@coding`.
+### 3.1 Autonomous Issue Investigation (`@coding-investigate`)
+For complex bugs, defects, test failures, or cross-repository diagnostic tasks, use the companion plugin **`agentic-investigate-plugin`** (`@coding-investigate`), which performs autonomous root cause analysis, user interrogation, and hands off approved fixes to `@coding`.
 
-### 3.2 External Telemetry & Stream Surveillance (`@monitoring`)
-For long-running tasks, Docker logs, serial consoles (`/dev/tty*`), or continuous build streams, use the companion plugin **`agentic-monitoring-plugin`** (`@monitoring`), which provides real-time streaming surveillance with interactive anomaly pause gates.
+### 3.2 External Telemetry & Stream Surveillance (`@coding-monitor`)
+For long-running tasks, Docker logs, serial consoles (`/dev/tty*`), or continuous build streams, use the companion plugin **`agentic-monitoring-plugin`** (`@coding-monitor`), which provides real-time streaming surveillance with interactive anomaly pause gates.
+
+### 3.3 Documentation Archival & Obsidian Vault Integration (`@coding-document`)
+For persistent documentation across projects, features, architecture designs, ADRs, session logs, and git status updates, use the companion plugin **`agentic-obsidian-plugin`** (or `agentic-document-plugin`) (`@coding-document`), invoked by `@coding` after each phase of the lifecycle.
+
+### 3.4 Deep Web & Literature Research (`@coding-research`)
+For autonomous topic investigations, technology evaluations, documentation searches, and comparative research reports, use the companion plugin **`agentic-research-plugin`** (`@coding-research`).
 
 ---
 

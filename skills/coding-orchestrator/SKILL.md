@@ -86,24 +86,24 @@ flowchart TD
    - Awaits interactive user approval in the background (`idle` state).
    - **Idle Guard**: Orchestrator ignores `has gone idle` platform notifications, halts turn execution without calling tools, and awaits explicit subagent approval message.
    - Advances to `coding-plan` ONLY upon receiving explicit `[GATE_APPROVED] specification.md:` message from `coding-specify` (or routes to `coding-clarify` on `[GATE_REJECTED]`).
-   - **Post-Phase Documentation**: If `agentic-document-plugin` is installed, invoke `@coding-document` to document and index the approved specification in the vault.
+   - **Post-Phase Documentation**: If `agentic-document-plugin` (or `agentic-obsidian-plugin`) is installed, invoke `@coding-document` to document and index the approved specification in the vault.
 3. **`coding-plan`**:
    - Decomposes work per repository and determines branch names (`feature/*`, `task/*`, `bugfix/*`).
    - Produces `plan.md` (Artifact with `RequestFeedback=True` as sole tool call) and awaits user approval in the background (`idle` state).
    - **Idle Guard**: Orchestrator ignores `has gone idle` platform notifications, halts turn execution without calling tools, and awaits explicit subagent approval message.
    - Advances to `coding-develop` ONLY upon receiving explicit `[GATE_APPROVED] plan.md:` message from `coding-plan` (or routes to `coding-clarify` on `[GATE_REJECTED]`).
-   - **Post-Phase Documentation**: If `agentic-document-plugin` is installed, invoke `@coding-document` to document architecture plans and ADRs.
+   - **Post-Phase Documentation**: If `agentic-document-plugin` (or `agentic-obsidian-plugin`) is installed, invoke `@coding-document` to document architecture plans and ADRs.
 4. **`coding-develop`**:
    - Fanned out in parallel per repository (`coding-develop-<repo>`).
    - Scoped strictly to each repo directory. Writes code, tests, documentation, and verifies linting.
-   - **Post-Phase Documentation**: If `agentic-document-plugin` is installed, invoke `@coding-document` to document code changes, implementation notes, and test reports.
+   - **Post-Phase Documentation**: If `agentic-document-plugin` (or `agentic-obsidian-plugin`) is installed, invoke `@coding-document` to document code changes, implementation notes, and test reports.
 5. **`coding-review`**:
    - Collects all develop reports. Confirms cross-repo consistency and spec compliance.
    - If defects found, loops back to `coding-plan`. If approved, asks user for merge confirmation.
-   - **Pre-Merge Documentation (Tidy Up)**: If `agentic-document-plugin` is installed, invoke `@coding-document` prior to merging to tidy up project and feature documentation, architecture diagrams, and ADRs.
+   - **Pre-Merge Documentation (Tidy Up)**: If `agentic-document-plugin` (or `agentic-obsidian-plugin`) is installed, invoke `@coding-document` prior to merging to tidy up project and feature documentation, architecture diagrams, and ADRs.
 6. **`coding-merge`**:
    - Automatically merges locally or opens a Pull Request with `gh` if remote exists.
-   - **Post-Merge Documentation (Git Status)**: If `agentic-document-plugin` is installed, invoke `@coding-document` at the end to update git status, branch states, and changelogs in the Obsidian vault.
+   - **Post-Merge Documentation (Git Status)**: If `agentic-document-plugin` (or `agentic-obsidian-plugin`) is installed, invoke `@coding-document` at the end to update git status, branch states, and changelogs in the Obsidian vault.
 
 ## Interactive Approval Gate & Idle Guard Protocol
 
