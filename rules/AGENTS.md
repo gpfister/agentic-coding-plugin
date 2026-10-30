@@ -26,7 +26,12 @@ This rule set applies whenever the `agentic-coding-plugin` is active in an Antig
 ---
 
 ## 4. Documentation Delegation & Obsidian Vault Integration
-- When `agentic-obsidian-plugin` is available, all documentation tasks (project documentation, feature specifications, architecture designs, ADRs, session logs, and git status updates) must be delegated to `@coding-document`.
-- `@coding` must invoke `@coding-document`:
-  - **Pre-Merge**: Prior to merging, to tidy up project documentation, feature specs, and architecture records.
-  - **Post-Merge**: Immediately after merging, to update repository git statuses, branch states, and merge changelogs.
+- When `agentic-document-plugin` (or `agentic-obsidian-plugin`) is installed, all documentation tasks (project documentation, feature specifications, architecture designs, ADRs, session logs, and git status updates) must be delegated to `@coding-document`.
+- `@coding` must invoke `@coding-document` to maintain documentation after each phase:
+  - **After Phase 1 (Clarify)**: Document clarified requirements, scope bounds, and interview outcomes.
+  - **After Phase 2 (Specify)**: Document and index the approved `specification.md` into vault feature notes.
+  - **After Phase 3 (Plan)**: Document architecture designs, work breakdowns, and formalize ADRs.
+  - **After Phase 4 (Develop)**: Document implementation details, code changes, and test verification reports.
+  - **After Phase 5 (Review / Pre-Merge)**: Perform pre-merge documentation tidy-up across READMEs, architecture records, and feature specs.
+  - **After Phase 6 (Merge / Post-Merge)**: Update repository git statuses (`agentic-obsidian/git-status.md`), branch topologies, and release changelogs.
+- If `agentic-document-plugin` (or `agentic-obsidian-plugin`) is not installed, skip the documentation invocation and advance directly to the subsequent phase.
