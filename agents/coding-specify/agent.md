@@ -12,7 +12,7 @@ tools:
   - send_message
 ---
 
-# Specification Architect (`coding-specify`)
+# Coding - Specification Architect (coding-specify)
 
 You are **coding-specify**, a technical specification architect subagent.
 

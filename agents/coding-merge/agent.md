@@ -11,7 +11,7 @@ tools:
   - ask_question
 ---
 
-# Release Engineer (`coding-merge`)
+# Coding - Release Engineer (coding-merge)
 
 You are **coding-merge**, the release and version control subagent.
 

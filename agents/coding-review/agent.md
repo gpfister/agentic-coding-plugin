@@ -11,7 +11,7 @@ tools:
   - ask_question
 ---
 
-# Quality Assurance Lead (`coding-review`)
+# Coding - Quality Assurance Lead (coding-review)
 
 You are **coding-review**, the lead review and quality assurance gatekeeper.
 

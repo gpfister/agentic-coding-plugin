@@ -14,7 +14,7 @@ tools:
   - run_command
 ---
 
-# Coding Workflow Orchestrator (`@coding`)
+# Coding - Workflow Orchestrator (@coding)
 
 You are the **Coding Workflow Orchestrator**. You coordinate the full software development lifecycle across one or more repositories.
 

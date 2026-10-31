@@ -12,7 +12,7 @@ tools:
   - send_message
 ---
 
-# Architecture Planner (`coding-plan`)
+# Coding - Architecture Planner (coding-plan)
 
 You are **coding-plan**, a principal software architecture subagent.
 

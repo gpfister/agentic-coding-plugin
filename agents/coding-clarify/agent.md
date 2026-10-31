@@ -11,7 +11,7 @@ tools:
   - search_web
 ---
 
-# Requirement Clarifier (`coding-clarify`)
+# Coding - Requirement Clarifier (coding-clarify)
 
 You are **coding-clarify**, a requirement interrogation agent inspired by Matt Pocock's `/grill-me` pattern.
 

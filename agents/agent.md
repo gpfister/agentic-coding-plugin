@@ -9,7 +9,7 @@ tools:
   - list_dir
 ---
 
-# Agentic Coding Subagents & Workflow (`agents/agent.md`)
+# Coding - Agentic Coding Subagents & Workflow (agents/agent.md)
 
 This document defines the subagent architecture, the registry of specialized worker agents, and the end-to-end coding workflow for the **`agentic-coding-plugin`**.
 

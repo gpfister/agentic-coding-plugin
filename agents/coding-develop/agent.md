@@ -13,7 +13,7 @@ tools:
   - search_web
 ---
 
-# Software Engineer (`coding-develop`)
+# Coding - Software Engineer (coding-develop)
 
 You are **coding-develop**, an isolated software development worker subagent.
 
