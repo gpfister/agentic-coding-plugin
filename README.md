@@ -30,10 +30,12 @@ The `agentic-coding-plugin` coordinates a 6-stage development lifecycle:
 ### Companion Plugins & Ecosystem Subagents
 
 This plugin collaborates seamlessly with companion plugins in the `agentic` workspace:
-- **`@coding-investigate`** ([`agentic-investigate-plugin`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-investigate-plugin)): Autonomous multi-repo root cause diagnosis and issue resolution.
-- **`@coding-monitor`** ([`agentic-monitoring-plugin`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-monitoring-plugin)): Telemetry, log surveillance, and Docker stream observation.
-- **`@coding-document`** ([`agentic-obsidian-plugin`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-obsidian-plugin)): Centralized Obsidian documentation vault maintenance.
-- **`@coding-research`** ([`agentic-research-plugin`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-research-plugin)): Autonomous web and literature research briefs.
+- **`@coding-investigate`** ([`agentic-issue-investigation-plugin`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-issue-investigation-plugin)): Autonomous multi-repo root cause diagnosis and issue resolution.
+- **`@coding-monitor`** ([`agentic-task-monitoring-plugin`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-task-monitoring-plugin)): Telemetry, log surveillance, and Docker stream observation.
+- **`@coding-document`** ([`agentic-project-documenting-plugin`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-project-documenting-plugin)): Centralized Obsidian documentation vault maintenance.
+- **`@coding-research`** ([`agentic-topic-researching-plugin`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-topic-researching-plugin)): Autonomous web and literature research briefs.
+- **`/project-grooming`** ([`agentic-project-grooming-plugin`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-project-grooming-plugin)): Interactive project initialization, backlog grooming, and scope boundary interrogation.
+- **`Prompt Triage`** ([`agentic-prompt-triage-plugin`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-prompt-triage-plugin)): Dynamic non-autoregressive prompt classification and intent routing.
 
 ---
 

@@ -32,9 +32,9 @@ def test_discover_agents():
     ]
     for expected in expected_agents:
         assert expected in agent_names, f"Expected agent '{expected}' to be discovered in agents/"
-    assert "coding-investigate" not in agent_names, "coding-investigate agent should be moved to agentic-investigate-plugin"
-    assert "monitoring" not in agent_names, "monitoring agent should be moved to agentic-monitoring-plugin"
-    assert "coding-monitoring" not in agent_names, "coding-monitoring agent should be moved to agentic-monitoring-plugin"
+    assert "coding-investigate" not in agent_names, "coding-investigate agent should be moved to agentic-issue-investigation-plugin"
+    assert "monitoring" not in agent_names, "monitoring agent should be moved to agentic-task-monitoring-plugin"
+    assert "coding-monitoring" not in agent_names, "coding-monitoring agent should be moved to agentic-task-monitoring-plugin"
     assert "coding-orchestrator" not in agent_names, "coding-orchestrator should be merged into coding"
     assert "coding-invetigator" not in agent_names, "coding-invetigator typo should be eliminated"
     assert "coding-investigator" not in agent_names, "coding-investigator should be merged into coding-investigate"
