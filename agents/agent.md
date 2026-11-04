@@ -1,6 +1,6 @@
 ---
 name: coding-catalog
-description: Subagent architecture, registry catalog, and 6-stage software development lifecycle workflow guide.
+description: Subagent architecture, registry catalog, and 7-stage software development lifecycle workflow guide.
 enable_write_tools: false
 enable_subagent_tools: false
 enable_mcp_tools: false
@@ -35,9 +35,11 @@ agents/
 │   └── agent.md
 ├── coding-develop/                 # Stage 4: Per-Repo Software Engineer
 │   └── agent.md
-├── coding-review/                  # Stage 5: QA Gatekeeper
+├── coding-deploy/                  # Stage 5: Local Deployment Specialist
 │   └── agent.md
-└── coding-merge/                   # Stage 6: Release & Merge Engineer
+├── coding-review/                  # Stage 6: QA Gatekeeper
+│   └── agent.md
+└── coding-merge/                   # Stage 7: Release & Merge Engineer
     └── agent.md
 ```
 
@@ -46,25 +48,28 @@ Subagents are discovered dynamically and registered via `define_subagent` (or `d
 
 | Agent Handle | Directory | `enable_write_tools` | `enable_subagent_tools` | `enable_mcp_tools` | Allowed Tools | Primary Responsibility |
 | :--- | :--- | :---: | :---: | :---: | :--- | :--- |
-| **`@coding`** | [`agents/coding/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding/) | `True` | `True` | `True` | `invoke_subagent`, `send_message`, `manage_subagents`, `ask_question`, `read_file`, `list_dir`, `run_command` | 6-stage lifecycle pipeline orchestration |
+| **`@coding`** | [`agents/coding/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding/) | `True` | `True` | `True` | `invoke_subagent`, `send_message`, `manage_subagents`, `ask_question`, `read_file`, `list_dir`, `run_command` | 7-stage lifecycle pipeline orchestration |
 | **`@coding-clarify`** | [`agents/coding-clarify/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-clarify/) | `False` | `False` | `True` | `ask_question`, `read_file`, `list_dir`, `search_web` | One-question-at-a-time requirement interrogation |
 | **`@coding-specify`** | [`agents/coding-specify/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-specify/) | `True` | `False` | `True` | `write_file`, `read_file`, `list_dir`, `search_web`, `send_message` | Specification authoring & interactive approval gate |
-| **`@coding-plan`** | [`agents/coding-plan/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-plan/) | `True` | `False` | `True` | `write_file`, `read_file`, `list_dir`, `run_command`, `send_message` | Multi-repo task breakdown & branch planning |
-| **`@coding-develop`** | [`agents/coding-develop/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-develop/) | `True` | `False` | `True` | `read_file`, `write_file`, `edit_file`, `list_dir`, `run_command`, `search_web` | Isolated repo implementation, tests, linting, docs |
-| **`@coding-review`** | [`agents/coding-review/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-review/) | `True` | `False` | `True` | `read_file`, `list_dir`, `run_command`, `ask_question` | Deliverables verification against specification |
+| **`@coding-plan`** | [`agents/coding-plan/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-plan/) | `True` | `False` | `True` | `write_file`, `read_file`, `list_dir`, `run_command`, `send_message` | Multi-repo task breakdown, deployment assessment, & branch planning |
+| **`@coding-develop`** | [`agents/coding-develop/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-develop/) | `True` | `False` | `True` | `read_file`, `write_file`, `edit_file`, `list_dir`, `run_command`, `search_web` | Isolated repo implementation, tests, linting, docs, and fix remediation |
+| **`@coding-deploy`** | [`agents/coding-deploy/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-deploy/) | `True` | `True` | `True` | `run_command`, `read_file`, `list_dir`, `write_file`, `edit_file`, `ask_question`, `send_message`, `invoke_subagent` | Local deployment execution, health monitoring, error investigation & fix orchestration |
+| **`@coding-review`** | [`agents/coding-review/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-review/) | `True` | `False` | `True` | `read_file`, `list_dir`, `run_command`, `ask_question` | Deliverables and deployment verification against specification |
 | **`@coding-merge`** | [`agents/coding-merge/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-merge/) | `True` | `False` | `True` | `run_command`, `read_file`, `list_dir`, `ask_question` | Local branch merge or GitHub Pull Request (`gh pr create`) |
 
 ---
 
-## 2. The 6-Stage Coding Workflow
+## 2. The 7-Stage Coding Workflow
 
-The core software development lifecycle executes sequentially across 6 distinct phases coordinated by the `@coding` orchestrator:
+The core software development lifecycle executes sequentially across 7 distinct phases coordinated by the `@coding` orchestrator:
 
 ```text
 coding-clarify ──> coding-specify ──> coding-plan ──> coding-develop (parallel per repo)
                           ▲               ▲                      │
-                          │ (reject/fb)   │ (reject/fb)          ▼
-                          └───────────────┴────────────── coding-review
+                          │               │                      ▼
+                          │ (reject/fb)   │ (reject/fb)   coding-deploy (immediate per repo)
+                          │               │                      │
+                          └───────────────┴────────────── coding-review (all dev + deploy done)
                                                                  │ (approved)
                                                                  ▼
                                                            coding-merge
@@ -87,7 +92,10 @@ coding-clarify ──> coding-specify ──> coding-plan ──> coding-develop
   - `@coding` advances to Stage 3 (`coding-plan`) **only** upon receiving an explicit `[GATE_APPROVED] specification.md:` message from `coding-specify`.
 
 ### Stage 3: Planning (`coding-plan`)
-- **Objective**: Deconstruct the approved specification into atomic, verifiable steps and determine git branch names (`plan.md`).
+- **Objective**: Deconstruct the approved specification into atomic, verifiable steps, assess local deployment requirements, and determine git branch names (`plan.md`).
+- **Local Deployment Assessment**:
+  - `coding-plan` inspects each target repository for local deployment mechanisms (Docker, docker-compose, scripts/deployment_local.sh, terraform/local, Minikube/Kubernetes manifests).
+  - Explicitly adds local deployment tasks for repositories requiring them.
 - **Multi-Repository Isolation**:
   - Assigns work strictly per repository (respecting workspace boundaries).
   - Branch conventions: `feature/<name>` (new capabilities), `task/<name>` (maintenance/refactoring), `bugfix/<name>` (bug fixes).
@@ -103,15 +111,32 @@ coding-clarify ──> coding-specify ──> coding-plan ──> coding-develop
   - Run all unit and integration tests; verify 100% clean passes.
   - Preserve all existing comments and docstrings unrelated to code changes.
   - Output structured `DevelopReport` JSON summarizing modified files and test outputs back to `@coding`.
+- **Immediate Per-Repo Deployment Trigger**:
+  - As each repository's development concludes, if that repository contains local deployment instructions, Stage 5 (`coding-deploy`) is triggered immediately for that repository.
 
-### Stage 5: Review (`coding-review`)
-- **Objective**: Validate all deliverables against the original specification and verify cross-repo contract compatibility.
+### Stage 5: Local Deployment (`coding-deploy`)
+- **Objective**: Execute local deployment and monitor health in real time to ensure containerized services, local clusters (e.g. Minikube), or local runtimes deploy properly.
+- **Trigger**: Invoked one time for every repository containing local deployment instructions, immediately following the completion of that repository's `coding-develop` step.
+- **Monitoring**: Actively monitors container statuses, pod states (`kubectl get pods`), and service endpoints (`curl -fsS http://localhost:<port>/health`).
+- **Error Investigation & Self-Healing Protocol**:
+  - If a deployment failure or unhealthy probe occurs:
+    1. Investigate the failure and extract diagnostic evidence (logs, pod descriptions, events).
+    2. Author a `Deployment Issue` artifact (`deployment-issue.md`) with `RequestFeedback=True` as the sole and final tool call of the turn.
+    3. Await user decision at the approval gate.
+    4. If approved: if multiple solutions were proposed, prompt the user with `ask_question` to choose the desired fix.
+    5. Invoke `coding-develop` to implement the approved fix.
+    6. Re-deploy and verify health until clean or user aborts.
+- **Handoff**: Concludes with structured `DeployReport` JSON.
+
+### Stage 6: Review (`coding-review`)
+- **Objective**: Validate all deliverables against the original specification, verify cross-repo contract compatibility, and confirm that all required local deployments succeeded.
 - **Discrepancy Routing**:
   - If regressions or specification discrepancies are found: Route issues back to `coding-plan` via `@coding` with actionable feedback.
   - If approved: Present validation summary to the user and request confirmation to proceed to merge.
 
-### Stage 6: Merge & Release (`coding-merge`)
+### Stage 7: Release & Merge (`coding-merge`)
 - **Objective**: Safely integrate approved changes into repository release branches.
+- **Prerequisite**: `@coding-merge` strictly waits for all `coding-deploy` and all `coding-develop` tasks to have completed successfully before proceeding.
 - **Merge Strategy**:
   - **No Remote Repository**: Checkout base branch (`master`/`main`) and execute local `git merge <branch>`.
   - **Remote Repository Configured**: Push branch to origin (`git push origin <branch>`) and create a Pull Request via GitHub CLI (`gh pr create`).
@@ -127,7 +152,7 @@ For complex bugs, defects, test failures, or cross-repository diagnostic tasks, 
 For long-running tasks, Docker logs, serial consoles (`/dev/tty*`), or continuous build streams, use the companion plugin **`agentic-task-monitoring-plugin`** (`@coding-monitor`), which provides real-time streaming surveillance with interactive anomaly pause gates.
 
 ### 3.3 Documentation Archival & Obsidian Vault Integration (`@coding-document`)
-For persistent documentation across projects, features, architecture designs, ADRs, session logs, and git status updates, use the companion plugin **`agentic-project-documenting-plugin`** (`@coding-document`), invoked by `@coding` after each phase of the lifecycle.
+For persistent documentation across projects, features, architecture designs, ADRs, session logs, and git status updates, use the companion plugin **`agentic-project-documenting-plugin`** (`@coding-document`), invoked by `@coding` only after the plan is approved, before merging, and at the end of the lifecycle.
 
 ### 3.4 Deep Web & Literature Research (`@coding-research`)
 For autonomous topic investigations, technology evaluations, documentation searches, and comparative research reports, use the companion plugin **`agentic-topic-researching-plugin`** (`@coding-research`).
@@ -142,7 +167,7 @@ For fast non-autoregressive prompt classification and intent routing across inst
 
 ## 4. Antigravity Interactive Artifact Approval Protocol
 
-Artifacts requiring human confirmation (`specification.md`, `plan.md`) must trigger the interactive **Approve / Reject** modal in the Antigravity UI:
+Artifacts requiring human confirmation (`specification.md`, `plan.md`, `deployment-issue.md`) must trigger the interactive **Approve / Reject** modal in the Antigravity UI:
 
 1. **Artifact Location**: Write directly to the conversation artifact directory:
    `<appDataDir>/brain/<conversation-id>/<artifact_name>.md`.
@@ -164,7 +189,7 @@ Artifacts requiring human confirmation (`specification.md`, `plan.md`) must trig
    - Never batch secondary tool calls (e.g. running shell commands, writing Obsidian notes, sending messages) in the same turn.
    - Stop calling tools immediately after writing the artifact to yield the turn to the user and enter the `idle` state.
 4. **Subagent Idle vs Approval Disambiguation Guard**:
-   - When a gatekeeper subagent (`coding-specify` or `coding-plan`) writes an artifact and enters `idle`, Antigravity notifies the orchestrator: `Subagent <id> has gone idle`.
+   - When a gatekeeper subagent (`coding-specify`, `coding-plan`, or `coding-deploy`) writes an artifact and enters `idle`, Antigravity notifies the orchestrator: `Subagent <id> has gone idle`.
    - **DO NOT proceed to the next stage upon receiving `Subagent <id> has gone idle`!** The orchestrator must terminate its turn without calling any tools and remain idle.
 5. **Handling User Decisions & Gate Messages**:
    - On interactive approval (`[Approved] <artifact>.md`), the subagent sends:

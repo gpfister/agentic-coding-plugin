@@ -14,6 +14,7 @@ This rule set applies whenever the `agentic-coding-plugin` is active in an Antig
 
 ## 2. Code Review & Verification
 - Verify all code changes with relevant automated tests or dry runs before concluding a task.
+- When repositories contain local deployment instructions (Docker, Compose, Minikube, Terraform, scripts), execute and monitor local deployment via `@coding-deploy` after development before code review and merge.
 - When creating or editing files, create clickable file and symbol links in markdown responses using the `file://` scheme.
 - Adhere to the language idioms and clean architecture boundaries of the host project.
 
@@ -27,21 +28,18 @@ This rule set applies whenever the `agentic-coding-plugin` is active in an Antig
 
 ## 4. Documentation Delegation & Obsidian Vault Integration
 - When `agentic-project-documenting-plugin` is installed, all documentation tasks (project documentation, feature specifications, architecture designs, ADRs, session logs, and git status updates) must be delegated to `@coding-document`.
-- `@coding` must invoke `@coding-document` to maintain documentation after each phase:
-  - **After Phase 1 (Clarify)**: Document clarified requirements, scope bounds, and interview outcomes.
-  - **After Phase 2 (Specify)**: Document and index the approved `specification.md` into vault feature notes.
-  - **After Phase 3 (Plan)**: Document architecture designs, work breakdowns, and formalize ADRs.
-  - **After Phase 4 (Develop)**: Document implementation details, code changes, and test verification reports.
-  - **After Phase 5 (Review / Pre-Merge)**: Perform pre-merge documentation tidy-up across READMEs, architecture records, and feature specs.
-  - **After Phase 6 (Merge / Post-Merge)**: Update repository git statuses (`agentic-obsidian/git-status.md`), branch topologies, and release changelogs.
+- `@coding` must invoke `@coding-document` to maintain documentation only after:
+  - **After the Plan is Approved**: Document architecture designs, work breakdowns, approved feature specifications, and formalize ADRs.
+  - **Before Merging (Pre-Merge)**: Perform pre-merge documentation tidy-up across READMEs, architecture records, and feature specs upon merge confirmation.
+  - **At the End (Post-Merge)**: Update repository git statuses (`agentic-obsidian/git-status.md`), branch topologies, and release changelogs once merge concludes.
 - If `agentic-project-documenting-plugin` is not installed, skip the documentation invocation and advance directly to the subsequent phase.
 
 ---
 
 ## 5. Companion Subagents & Delegation
+- **Local Deployment & Health Monitoring**: Local deployment execution and monitoring is handled by `@coding-deploy`.
 - **Issue Investigation**: Complex root-cause diagnosis, defect tracing, and fix proposals are handled by `@coding-investigate` (`agentic-issue-investigation-plugin`).
 - **Telemetry & Stream Surveillance**: Real-time log, container, and serial stream monitoring is handled by `@coding-monitor` (`agentic-task-monitoring-plugin`).
 - **Topic & Literature Research**: Deep web research, technical literature synthesis, and documentation lookups are handled by `@coding-research` (`agentic-topic-researching-plugin`).
 - **Project Grooming**: Scope boundary clarification, backlog grooming, and repository bootstrapping are handled via `/project-grooming` (`agentic-project-grooming-plugin`).
 - **Prompt Triage**: Request classification and intent routing are handled by the dynamic triage hook (`agentic-prompt-triage-plugin`).
-

@@ -7,7 +7,7 @@ A Google Antigravity companion plugin for high-quality software engineering and 
 - **`plugin.json`**: Plugin manifest declaring metadata and post-install scripts.
 - **`pyproject.toml`**: Package specification and testing dependencies managed via `uv`.
 - **`scripts/post_install.sh`**: Post-installation script that runs `uv sync` to provision `.venv`.
-- **`agents/`**: Declarative subagent definitions for the 6-stage lifecycle (`@coding`, `@coding-clarify`, `@coding-specify`, `@coding-plan`, `@coding-develop`, `@coding-review`, `@coding-merge`).
+- **`agents/`**: Declarative subagent definitions for the 7-stage lifecycle (`@coding`, `@coding-clarify`, `@coding-specify`, `@coding-plan`, `@coding-develop`, `@coding-deploy`, `@coding-review`, `@coding-merge`).
 - **`rules/AGENTS.md`**: Core engineering principles, testing constraints, and code style rules applied whenever this plugin is active.
 - **`skills/coding-orchestrator/`**: Progressive skill orchestrating full-lifecycle software delivery.
 - **`skills/clean-code-reviewer/`**: Progressive skill for auditing codebases for anti-patterns, code smells, and architecture boundaries.
@@ -18,18 +18,20 @@ A Google Antigravity companion plugin for high-quality software engineering and 
 
 ## Architecture & Subagents
 
-The `agentic-coding-plugin` coordinates a 6-stage development lifecycle:
+The `agentic-coding-plugin` coordinates a 7-stage development lifecycle:
 
 1. **Clarification (`@coding-clarify`)**: Interrogates edge cases and dependencies one question at a time.
 2. **Specification (`@coding-specify`)**: Authors `specification.md` with interactive approval gate.
-3. **Planning (`@coding-plan`)**: Breaks down tasks and git branches in `plan.md` with interactive approval gate.
+3. **Planning (`@coding-plan`)**: Breaks down tasks, assesses local deployment, and plans git branches in `plan.md` with interactive approval gate.
 4. **Development (`@coding-develop`)**: Parallel implementation workers per repository.
-5. **Review (`@coding-review`)**: Audits changes against specification and verifies tests.
-6. **Release & Merge (`@coding-merge`)**: Merges locally or creates GitHub pull requests.
+5. **Local Deployment (`@coding-deploy`)**: Executes and monitors local deployment (Docker, Minikube, Terraform, scripts) per repo, investigating errors and authoring `Deployment Issue` artifacts with remediation options on failure.
+6. **Review (`@coding-review`)**: Audits changes and deployment health against specification and verifies tests.
+7. **Release & Merge (`@coding-merge`)**: Merges locally or creates GitHub pull requests after all development and deployment tasks complete.
 
 ### Companion Plugins & Ecosystem Subagents
 
 This plugin collaborates seamlessly with companion plugins in the `agentic` workspace:
+- **`@coding-deploy`**: Autonomous local deployment execution, health monitoring, error diagnosis, and self-healing.
 - **`@coding-investigate`** ([`agentic-issue-investigation-plugin`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-issue-investigation-plugin)): Autonomous multi-repo root cause diagnosis and issue resolution.
 - **`@coding-monitor`** ([`agentic-task-monitoring-plugin`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-task-monitoring-plugin)): Telemetry, log surveillance, and Docker stream observation.
 - **`@coding-document`** ([`agentic-project-documenting-plugin`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-project-documenting-plugin)): Centralized Obsidian documentation vault maintenance.
