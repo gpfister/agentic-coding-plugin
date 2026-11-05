@@ -43,3 +43,11 @@ This rule set applies whenever the `agentic-coding-plugin` is active in an Antig
 - **Topic & Literature Research**: Deep web research, technical literature synthesis, and documentation lookups are handled by `@coding-research` (`agentic-topic-researching-plugin`).
 - **Project Grooming**: Scope boundary clarification, backlog grooming, and repository bootstrapping are handled via `/project-grooming` (`agentic-project-grooming-plugin`).
 - **Prompt Triage**: Request classification and intent routing are handled by the dynamic triage hook (`agentic-prompt-triage-plugin`).
+
+---
+
+## 6. Question Relay Protocol & Interactive Gates
+- **Question Delegation**: When running under `@coding` (caller ID present), worker subagents (`@coding-clarify`, `@coding-deploy`, `@coding-review`) must not execute user-prompting tools (`ask_question`) directly.
+- **Contract Format**: Subagents must relay questions to the parent orchestrator using `send_message` with `[QUESTION_RELAY_REQUEST]\nQuestion: ...\nOptions: ...\nContext: ...`. The parent orchestrator prompts the user at the session root via `ask_question` and replies to the subagent with `[QUESTION_RELAY_RESPONSE]\nAnswer: ...`.
+- **Subagent Timeout Mitigation**: Relaying questions to the root orchestrator ensures prompt visibility in the main UI stream and mitigates subagent timeouts caused by deep nested interaction blocking.
+- **Standalone Fallback**: If a worker subagent is invoked as a standalone top-level agent without a caller ID, it falls back to calling `ask_question` directly.

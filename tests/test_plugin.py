@@ -185,6 +185,20 @@ def test_subagents_frontmatter_and_permissions():
     assert meta_coding.get("enable_subagent_tools") is True
     assert meta_coding.get("enable_write_tools") is True
 
+    clarify_md = PLUGIN_ROOT / "agents" / "coding-clarify" / "agent.md"
+    meta_clarify = parse_frontmatter(clarify_md)
+    assert meta_clarify.get("name") == "coding-clarify"
+    clarify_tools = meta_clarify.get("tools", [])
+    assert "send_message" in clarify_tools, "coding-clarify must have 'send_message' tool"
+    assert "ask_question" in clarify_tools, "coding-clarify must have 'ask_question' tool"
+
+    review_md = PLUGIN_ROOT / "agents" / "coding-review" / "agent.md"
+    meta_review = parse_frontmatter(review_md)
+    assert meta_review.get("name") == "coding-review"
+    review_tools = meta_review.get("tools", [])
+    assert "send_message" in review_tools, "coding-review must have 'send_message' tool"
+    assert "ask_question" in review_tools, "coding-review must have 'ask_question' tool"
+
 
 def test_coding_deploy_specifications():
     """Verify specific instructions in coding-deploy/agent.md."""
@@ -213,3 +227,31 @@ def test_coding_merge_prerequisites():
     content = merge_md.read_text(encoding="utf-8")
     assert "coding-develop" in content
     assert "coding-deploy" in content
+
+
+def test_question_relay_protocol_contracts():
+    """Verify that Question Relay Protocol contracts and timeout mitigations exist across agents and skills."""
+    files_to_check = [
+        PLUGIN_ROOT / "agents" / "coding-clarify" / "agent.md",
+        PLUGIN_ROOT / "agents" / "coding" / "agent.md",
+        PLUGIN_ROOT / "agents" / "coding-deploy" / "agent.md",
+        PLUGIN_ROOT / "agents" / "coding-review" / "agent.md",
+        PLUGIN_ROOT / "skills" / "coding-orchestrator" / "SKILL.md",
+        PLUGIN_ROOT / "rules" / "AGENTS.md",
+        PLUGIN_ROOT / "agents" / "agent.md",
+    ]
+    for file_path in files_to_check:
+        assert file_path.exists(), f"{file_path} must exist"
+        content = file_path.read_text(encoding="utf-8")
+        assert "[QUESTION_RELAY_REQUEST]" in content, f"[QUESTION_RELAY_REQUEST] missing in {file_path.name}"
+        assert "[QUESTION_RELAY_RESPONSE]" in content, f"[QUESTION_RELAY_RESPONSE] missing in {file_path.name}"
+
+    # Verify timeout mitigation is documented
+    orchestrator_skill = (PLUGIN_ROOT / "skills" / "coding-orchestrator" / "SKILL.md").read_text(encoding="utf-8")
+    assert "timeout" in orchestrator_skill.lower()
+
+    rules_content = (PLUGIN_ROOT / "rules" / "AGENTS.md").read_text(encoding="utf-8")
+    assert "timeout" in rules_content.lower()
+
+    agent_catalog = (PLUGIN_ROOT / "agents" / "agent.md").read_text(encoding="utf-8")
+    assert "timeout" in agent_catalog.lower()

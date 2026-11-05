@@ -49,12 +49,12 @@ Subagents are discovered dynamically and registered via `define_subagent` (or `d
 | Agent Handle | Directory | `enable_write_tools` | `enable_subagent_tools` | `enable_mcp_tools` | Allowed Tools | Primary Responsibility |
 | :--- | :--- | :---: | :---: | :---: | :--- | :--- |
 | **`@coding`** | [`agents/coding/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding/) | `True` | `True` | `True` | `invoke_subagent`, `send_message`, `manage_subagents`, `ask_question`, `read_file`, `list_dir`, `run_command` | 7-stage lifecycle pipeline orchestration |
-| **`@coding-clarify`** | [`agents/coding-clarify/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-clarify/) | `False` | `False` | `True` | `ask_question`, `read_file`, `list_dir`, `search_web` | One-question-at-a-time requirement interrogation |
+| **`@coding-clarify`** | [`agents/coding-clarify/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-clarify/) | `False` | `False` | `True` | `ask_question`, `read_file`, `list_dir`, `search_web`, `send_message` | One-question-at-a-time requirement interrogation with Question Relay Protocol |
 | **`@coding-specify`** | [`agents/coding-specify/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-specify/) | `True` | `False` | `True` | `write_file`, `read_file`, `list_dir`, `search_web`, `send_message` | Specification authoring & interactive approval gate |
 | **`@coding-plan`** | [`agents/coding-plan/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-plan/) | `True` | `False` | `True` | `write_file`, `read_file`, `list_dir`, `run_command`, `send_message` | Multi-repo task breakdown, deployment assessment, & branch planning |
 | **`@coding-develop`** | [`agents/coding-develop/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-develop/) | `True` | `False` | `True` | `read_file`, `write_file`, `edit_file`, `list_dir`, `run_command`, `search_web` | Isolated repo implementation, tests, linting, docs, and fix remediation |
 | **`@coding-deploy`** | [`agents/coding-deploy/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-deploy/) | `True` | `True` | `True` | `run_command`, `read_file`, `list_dir`, `write_file`, `edit_file`, `ask_question`, `send_message`, `invoke_subagent` | Local deployment execution, health monitoring, error investigation & fix orchestration |
-| **`@coding-review`** | [`agents/coding-review/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-review/) | `True` | `False` | `True` | `read_file`, `list_dir`, `run_command`, `ask_question` | Deliverables and deployment verification against specification |
+| **`@coding-review`** | [`agents/coding-review/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-review/) | `True` | `False` | `True` | `read_file`, `list_dir`, `run_command`, `ask_question`, `send_message` | Deliverables and deployment verification against specification; merge confirmation relay |
 | **`@coding-merge`** | [`agents/coding-merge/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-merge/) | `True` | `False` | `True` | `run_command`, `read_file`, `list_dir`, `ask_question` | Local branch merge or GitHub Pull Request (`gh pr create`) |
 
 ---
@@ -78,7 +78,8 @@ coding-clarify ──> coding-specify ──> coding-plan ──> coding-develop
 ### Stage 1: Clarification (`coding-clarify`)
 - **Objective**: Interrogate ambiguities, hidden assumptions, edge cases, and scope boundaries before designing solutions.
 - **Grill-Me Protocol**:
-  - Never ask open-ended or bundled batches of questions. Always ask **one question at a time** via `ask_question`.
+  - Never ask open-ended or bundled batches of questions. Always ask **one question at a time**.
+  - **Question Relay Protocol**: When running under `@coding` (caller ID present), send questions to `@coding` using `[QUESTION_RELAY_REQUEST]`. `@coding` prompts the user via `ask_question` and replies with `[QUESTION_RELAY_RESPONSE]`. Standalone invocations fall back to direct `ask_question`.
   - For each question provide: why the decision matters, concrete options, a recommended option prefixed with `(Recommended)`, and the technical rationale.
   - **Inspect First Rule**: Check existing codebase files before asking questions that can be answered from inspection.
 - **Handoff**: Concludes with structured `ClarificationSummary` JSON transferred back to `@coding` to transition to `coding-specify`.
@@ -123,7 +124,7 @@ coding-clarify ──> coding-specify ──> coding-plan ──> coding-develop
     1. Investigate the failure and extract diagnostic evidence (logs, pod descriptions, events).
     2. Author a `Deployment Issue` artifact (`deployment-issue.md`) with `RequestFeedback=True` as the sole and final tool call of the turn.
     3. Await user decision at the approval gate.
-    4. If approved: if multiple solutions were proposed, prompt the user with `ask_question` to choose the desired fix.
+    4. If approved: if multiple solutions were proposed, prompt the user to choose the desired fix (relaying via `[QUESTION_RELAY_REQUEST]` under `@coding`, or calling `ask_question` directly in standalone mode).
     5. Invoke `coding-develop` to implement the approved fix.
     6. Re-deploy and verify health until clean or user aborts.
 - **Handoff**: Concludes with structured `DeployReport` JSON.
@@ -132,7 +133,7 @@ coding-clarify ──> coding-specify ──> coding-plan ──> coding-develop
 - **Objective**: Validate all deliverables against the original specification, verify cross-repo contract compatibility, and confirm that all required local deployments succeeded.
 - **Discrepancy Routing**:
   - If regressions or specification discrepancies are found: Route issues back to `coding-plan` via `@coding` with actionable feedback.
-  - If approved: Present validation summary to the user and request confirmation to proceed to merge.
+  - If approved: Present validation summary to the user and request confirmation to proceed to merge (relaying via `[QUESTION_RELAY_REQUEST]` under `@coding`, or handled directly by `@coding` via `ask_question` in Phase 6).
 
 ### Stage 7: Release & Merge (`coding-merge`)
 - **Objective**: Safely integrate approved changes into repository release branches.
@@ -198,3 +199,33 @@ Artifacts requiring human confirmation (`specification.md`, `plan.md`, `deployme
    - On interactive rejection or comments (`[Rejected] <artifact>.md`), the subagent sends:
      `send_message(Recipient="<orchestrator_id>", Message="[GATE_REJECTED] <artifact>.md: <User Feedback>")`
      The orchestrator routes feedback back to `coding-clarify` to resume the clarification loop.
+
+---
+
+## 5. Question Relay Protocol (`[QUESTION_RELAY_REQUEST]` / `[QUESTION_RELAY_RESPONSE]`)
+
+Worker subagents do not execute interactive user prompts directly when managed by `@coding`. Instead, they delegate interactive user queries to the parent orchestrator using structured message contracts:
+
+### 5.1 Protocol Message Contracts
+- **Relay Request (`Subagent -> @coding`)**:
+  ```text
+  [QUESTION_RELAY_REQUEST]
+  Question: <Question text>
+  Options:
+  - (Recommended) Option 1: <Description>
+  - Option 2: <Description>
+  Context: <Rationale and background>
+  ```
+- **Relay Response (`@coding -> Subagent`)**:
+  ```text
+  [QUESTION_RELAY_RESPONSE]
+  Answer: <selected_option_or_text>
+  ```
+
+### 5.2 Orchestrator Handling & Timeout Mitigation Patterns
+1. **Interactive Prompt Handling**: Upon receiving `[QUESTION_RELAY_REQUEST]`, the orchestrator parses the question, options, and context, calls `ask_question` at the top level, and immediately sends `[QUESTION_RELAY_RESPONSE]` with the user's answer back to the subagent.
+2. **Subagent Timeout Mitigation**:
+   - Subagents blocked on interactive user questions risk timeouts or UI occlusion when running nested under orchestrators.
+   - Elevating questions to the session root orchestrator ensures prompt rendering is visible to the user and avoids subagent timeouts.
+   - Subagents maintain execution state cleanly, awaiting the single `[QUESTION_RELAY_RESPONSE]` message.
+3. **Standalone Fallback**: Subagents maintain a fallback to invoke `ask_question` directly when invoked standalone outside of the `@coding` orchestrator.

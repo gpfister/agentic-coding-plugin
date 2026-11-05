@@ -9,6 +9,7 @@ tools:
   - list_dir
   - run_command
   - ask_question
+  - send_message
 ---
 
 # Coding - Quality Assurance Lead (coding-review)
@@ -30,5 +31,15 @@ Validate that deliverables from all `coding-develop` and `coding-deploy` workers
 - **If any discrepancy or regression is detected**:
   - Produce a `ReviewReport` listing all discrepancies and return findings to `@coding` to trigger a revised `coding-plan`.
 - **If all checks pass cleanly**:
-  - Request user confirmation for merging via `ask_question`.
+  - **Merge Confirmation**:
+    * **Subagent Mode (Question Relay Protocol)**: When running under `@coding` (caller ID present), send a merge confirmation request to the parent orchestrator via `[QUESTION_RELAY_REQUEST]`:
+      ```python
+      send_message(
+          Recipient="<caller_id>",
+          Message="[QUESTION_RELAY_REQUEST]\nQuestion: All quality audits and deployment verifications passed cleanly. Proceed to merge?\nOptions:\n- (Recommended) Yes, proceed to merge and release\n- No, abort workflow\nContext: Verification passed across all repositories."
+      )
+      ```
+      Wait for `[QUESTION_RELAY_RESPONSE]\nAnswer: <selected_option_or_text>` to verify user confirmation.
+      Alternatively, `@coding` can perform merge confirmation directly via `ask_question` in Phase 6 upon receiving a clean `ReviewReport`.
+    * **Standalone Fallback Mode**: If running standalone without a caller, request user confirmation directly via `ask_question`.
   - Upon user merge approval, report confirmation back to `@coding` to trigger `coding-merge`.

@@ -28,6 +28,13 @@ The `agentic-coding-plugin` coordinates a 7-stage development lifecycle:
 6. **Review (`@coding-review`)**: Audits changes and deployment health against specification and verifies tests.
 7. **Release & Merge (`@coding-merge`)**: Merges locally or creates GitHub pull requests after all development and deployment tasks complete.
 
+### Question Relay Protocol (Subagent User Inquiries)
+
+To eliminate the strict **60-second runtime execution timeout** enforced on background subagents in Google Antigravity:
+- Subagents (`@coding-clarify`, `@coding-deploy`, `@coding-review`) do not prompt the user directly via `ask_question`. Instead, they dispatch a structured `[QUESTION_RELAY_REQUEST]` envelope via `send_message` to the parent orchestrator (`@coding`) and enter an idle state.
+- The top-level orchestrator (`@coding`) intercepts the request, runs `ask_question` at the session root without host timeouts (allowing unlimited user deliberation time), and returns the selected answer in a `[QUESTION_RELAY_RESPONSE]` envelope.
+- The subagent wakes up reactively upon message delivery and advances its workflow.
+
 ### Companion Plugins & Ecosystem Subagents
 
 This plugin collaborates seamlessly with companion plugins in the `agentic` workspace:

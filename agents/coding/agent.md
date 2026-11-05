@@ -31,7 +31,7 @@ flowchart TD
     
     %% Phase 1: Clarification
     P1 --> AmbiguityCheck{"Ambiguities or<br/>Open Questions?"}
-    AmbiguityCheck -->|"Yes"| GrillUser["Interrogate User via ask_question<br/>(One question at a time)"]
+    AmbiguityCheck -->|"Yes"| GrillUser["Relay Question to User<br/>([QUESTION_RELAY_REQUEST] -> ask_question<br/>-> [QUESTION_RELAY_RESPONSE])"]
     GrillUser --> P1
     AmbiguityCheck -->|"No / Clarified"| P2["Phase 2: Specification<br/>(@coding-specify)"]
 
@@ -64,7 +64,7 @@ flowchart TD
     DeploySuccess -->|"Error"| DeployIssueArtifact["Investigate error & author<br/>Deployment Issue artifact<br/>(RequestFeedback=True)"]
     DeployIssueArtifact --> DeployGate{"User Decision on<br/>Deployment Issue?"}
     DeployGate -->|"Approved"| MultiSolCheck{"Multiple solutions<br/>proposed?"}
-    MultiSolCheck -->|"Yes"| AskSol["Ask user solution choice<br/>via ask_question"]
+    MultiSolCheck -->|"Yes"| AskSol["Relay solution choice<br/>([QUESTION_RELAY_REQUEST] -> ask_question<br/>-> [QUESTION_RELAY_RESPONSE])"]
     MultiSolCheck -->|"Single"| InvokeFixDev["Invoke @coding-develop<br/>to implement fix"]
     AskSol --> InvokeFixDev
     InvokeFixDev --> P5Deploy
@@ -74,7 +74,7 @@ flowchart TD
     JoinDevDeploy --> P6Review["Phase 6: Review<br/>(@coding-review)"]
     P6Review --> AuditChanges["Audit deliverables & deployment<br/>Run verification test suites"]
     AuditChanges --> ReviewCheck{"Quality Audit<br/>Passed?"}
-    ReviewCheck -->|"Passed"| MergeConfirmGate{"Confirm Merge with User<br/>(ask_question)"}
+    ReviewCheck -->|"Passed"| MergeConfirmGate{"Confirm Merge with User<br/>(ask_question directly or relayed)"}
     MergeConfirmGate -->|"User Confirmed"| DocPreMergeCheck{"agentic-project-documenting-plugin<br/>installed?"}
     DocPreMergeCheck -->|"Yes"| InvokeDocPreMerge["Invoke @coding-document<br/>(Pre-merge tidy-up: update READMEs & architecture docs)"]
     DocPreMergeCheck -->|"No"| P7Merge["Phase 7: Merge & Release<br/>(@coding-merge)"]
@@ -105,6 +105,16 @@ flowchart TD
       Prompt=f"Clarify and grill the user on the following request: {user_request}"
   )
   ```
+- **Question Relay Handling**: `coding-clarify` uses the Question Relay Protocol rather than calling `ask_question` directly. When you receive a message from `coding-clarify` matching `[QUESTION_RELAY_REQUEST]`:
+  1. Parse the `Question`, `Options`, and `Context` from the message payload.
+  2. Prompt the user directly using your top-level `ask_question` tool.
+  3. Send the user's selected choice or answer back to `coding-clarify`:
+     ```python
+     send_message(
+         Recipient="<coding-clarify-id>",
+         Message=f"[QUESTION_RELAY_RESPONSE]\nAnswer: {selected_option_or_text}"
+     )
+     ```
 - **Handoff**: Once all ambiguities are resolved, `coding-clarify` outputs a `ClarificationSummary`. Advance directly to `coding-specify`.
 
 ### Stage 2: Specification (`coding-specify`)
@@ -172,7 +182,8 @@ flowchart TD
   - If an error is encountered during deployment, `coding-deploy` investigates it and authors an artifact titled `Deployment Issue` (`deployment-issue.md`, `RequestFeedback=True`).
   - Antigravity presents interactive Approve / Reject buttons.
   - If approved:
-    * If multiple solutions were proposed, `coding-deploy` asks the user which one should be implemented using `ask_question` (one question at a time).
+    * If multiple solutions were proposed, `coding-deploy` sends a `[QUESTION_RELAY_REQUEST]` message to `@coding`.
+    * `@coding` prompts the user using `ask_question` and replies with `[QUESTION_RELAY_RESPONSE]\nAnswer: <selected_option>` to `coding-deploy`.
     * `coding-deploy` invokes `coding-develop` to implement the approved fix.
     * Once the fix is implemented, `coding-deploy` re-deploys and monitors until successful.
 - **Advancement**: Once all development and deployment workers have completed across all repositories, advance directly to `coding-review`.
@@ -188,7 +199,7 @@ flowchart TD
   ```
 - **Discrepancy Loop**:
   - If discrepancies, regressions, or broken contracts are found: invoke `coding-plan` with discrepancy details.
-  - If all checks pass: ask user for merge confirmation via `ask_question`.
+  - If all checks pass: merge confirmation is requested. Either `coding-review` requests merge confirmation via `[QUESTION_RELAY_REQUEST]` and `@coding` prompts the user via `ask_question` returning `[QUESTION_RELAY_RESPONSE]`, or `@coding` executes merge confirmation directly via `ask_question` in Phase 6 upon receiving a clean QA report.
 - **Pre-Merge Documentation Gate (Call 2/3 — Before Merging)**:
   - Upon receiving user merge confirmation, if `agentic-project-documenting-plugin` is installed, invoke `@coding-document` to perform pre-merge tidy-up:
     ```python
@@ -237,6 +248,39 @@ flowchart TD
 > **Stage Progression & Gate Messages**:
 > - You may ONLY proceed to Stage 3 or Stage 4 when the subagent sends an explicit message starting with `[GATE_APPROVED]` (e.g. `[GATE_APPROVED] specification.md: ...` or `[GATE_APPROVED] plan.md: ...`).
 > - If receiving `[GATE_REJECTED]`, route user comments and feedback back to `coding-clarify` to resume the clarification loop.
+
+## Question Relay Protocol (`[QUESTION_RELAY_REQUEST]` / `[QUESTION_RELAY_RESPONSE]`)
+
+To prevent subagent UI blockages, deep interactive tool deadlocks, and subagent timeouts during multi-agent orchestration, worker subagents do not prompt the human user directly when running under `@coding`. Instead, subagents delegate human questions to `@coding` using the Question Relay Protocol:
+
+### 1. Protocol Message Contracts
+- **Relay Request (`Subagent -> @coding`)**:
+  ```text
+  [QUESTION_RELAY_REQUEST]
+  Question: <Question text>
+  Options:
+  - (Recommended) Option 1: <Description>
+  - Option 2: <Description>
+  Context: <Rationale and background>
+  ```
+- **Relay Response (`@coding -> Subagent`)**:
+  ```text
+  [QUESTION_RELAY_RESPONSE]
+  Answer: <selected_option_or_text>
+  ```
+
+### 2. Orchestrator Relay Handler Rules
+When `@coding` receives any subagent message matching `[QUESTION_RELAY_REQUEST]`:
+1. **Parse Request**: Extract `Question`, `Options`, and `Context` from the message payload.
+2. **Interactive Prompt**: Prompt the user directly using the top-level `ask_question` tool.
+3. **Relay Response**: Send the user's answer back to the requesting subagent using:
+   ```python
+   send_message(
+       Recipient=sender_id,
+       Message="[QUESTION_RELAY_RESPONSE]\nAnswer: <selected_option_or_text>"
+   )
+   ```
+4. **Subagent Timeout Mitigation**: Handling user interactions at the top-level orchestrator maintains clear UI visibility, avoids nested tool-call deadlocks, and mitigates subagent timeouts while waiting for user inputs.
 
 ## Concurrency Rules
 - Only **one** coding workflow runs at a time.

@@ -99,19 +99,33 @@ When the user responds at the approval gate:
 - **On User Rejection**:
   Stop deployment, report failure to `@coding`, and halt execution.
 - **On User Approval**:
-  - **Multiple Solutions Proposed**: If the artifact proposed multiple solutions, ask the user which solution should be implemented using `ask_question` (asking strictly **one question at a time**, listing all options with the recommended one first):
-    ```python
-    ask_question(
-        questions=[{
-            "question": "Which deployment remediation solution would you like to implement?",
-            "options": [
-                "(Recommended) Option 1: <Description of recommended fix>",
-                "Option 2: <Description of alternative fix>"
-            ],
-            "is_multi_select": False
-        }]
-    )
-    ```
+  - **Multiple Solutions Proposed**: If the artifact proposed multiple solutions:
+    * **Subagent Mode (Question Relay Protocol)**: When running under `@coding` (caller ID present), do NOT call `ask_question` directly. Send a relay request to `@coding` using `send_message`:
+      ```python
+      send_message(
+          Recipient="<caller_id>",
+          Message="[QUESTION_RELAY_REQUEST]\nQuestion: Which deployment remediation solution would you like to implement?\nOptions:\n- (Recommended) Option 1: <Description of recommended fix>\n- Option 2: <Description of alternative fix>\nContext: Local deployment remediation selection for <repo>"
+      )
+      ```
+      Wait for `@coding` to relay the user's choice:
+      ```text
+      [QUESTION_RELAY_RESPONSE]
+      Answer: <selected_option_or_text>
+      ```
+      Extract the selected solution from `Answer:` to proceed.
+    * **Standalone Fallback Mode**: If running standalone without a caller, ask the user directly using `ask_question`:
+      ```python
+      ask_question(
+          questions=[{
+              "question": "Which deployment remediation solution would you like to implement?",
+              "options": [
+                  "(Recommended) Option 1: <Description of recommended fix>",
+                  "Option 2: <Description of alternative fix>"
+              ],
+              "is_multi_select": False
+          }]
+      )
+      ```
   - **Single Solution Proposed**: Advance directly with the approved solution.
 
 ### Step 4: Invoke `coding-develop` to Implement Fix
