@@ -255,3 +255,33 @@ def test_question_relay_protocol_contracts():
 
     agent_catalog = (PLUGIN_ROOT / "agents" / "agent.md").read_text(encoding="utf-8")
     assert "timeout" in agent_catalog.lower()
+
+
+def test_artifact_approval_relay_protocol_contracts():
+    """Verify that Artifact Approval Relay Protocol contracts exist across all specified files."""
+    files_to_check = [
+        PLUGIN_ROOT / "agents" / "coding-specify" / "agent.md",
+        PLUGIN_ROOT / "agents" / "coding-plan" / "agent.md",
+        PLUGIN_ROOT / "agents" / "coding-deploy" / "agent.md",
+        PLUGIN_ROOT / "agents" / "coding" / "agent.md",
+        PLUGIN_ROOT / "skills" / "coding-orchestrator" / "SKILL.md",
+        PLUGIN_ROOT / "rules" / "AGENTS.md",
+        PLUGIN_ROOT / "agents" / "agent.md",
+    ]
+    for file_path in files_to_check:
+        assert file_path.exists(), f"{file_path} must exist"
+        content = file_path.read_text(encoding="utf-8")
+        assert "[ARTIFACT_APPROVAL_REQUEST]" in content, f"[ARTIFACT_APPROVAL_REQUEST] missing in {file_path.name}"
+        assert "[ARTIFACT_APPROVAL_RESPONSE]" in content, f"[ARTIFACT_APPROVAL_RESPONSE] missing in {file_path.name}"
+
+    # Verify orchestrator includes write_file in its tools
+    coding_md = PLUGIN_ROOT / "agents" / "coding" / "agent.md"
+    meta_coding = parse_frontmatter(coding_md)
+    tools_coding = meta_coding.get("tools", [])
+    assert "write_file" in tools_coding, "coding orchestrator must have 'write_file' tool"
+
+    # Verify Section 7 exists in rules/AGENTS.md
+    rules_content = (PLUGIN_ROOT / "rules" / "AGENTS.md").read_text(encoding="utf-8")
+    assert "Artifact Approval Relay Protocol" in rules_content
+    assert "Section 7" in rules_content or "## 7." in rules_content
+

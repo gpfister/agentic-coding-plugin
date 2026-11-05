@@ -89,13 +89,29 @@ If an error is encountered during deployment or health monitoring (e.g., non-zer
    - **Proposed Solutions**:
      * If a single fix exists: Detail Option 1 (remediation steps, code/config to modify, expected impact).
      * If multiple fixes exist: Detail Option 1 (Recommended), Option 2, etc., providing trade-offs and rationale.
-3. **Sole and Final Tool Call Rule**:
-   - Write the artifact using `write_file` with `ArtifactMetadata={"RequestFeedback": True, "UserFacing": True, "Summary": "Local deployment issue diagnosis and remediation options for user approval"}`.
-   - This must be the **sole and final tool call** of that turn.
-   - Terminate the turn immediately without secondary tool calls so Antigravity enters the `idle` state and displays the interactive **Approve / Reject** buttons.
+3. **Artifact Creation & Approval Relay**:
+   - Write the artifact to disk using `write_file(Path=..., Content=..., Overwrite=True)` without `ArtifactMetadata` or without `RequestFeedback=True`.
+   - **Subagent Mode (Artifact Approval Relay Protocol)**:
+     When running under `@coding` (caller ID present), do NOT call `write_file` with `RequestFeedback=True` to avoid the 60-second subagent timeout. Dispatch `[ARTIFACT_APPROVAL_REQUEST]` to `caller_id` via `send_message`:
+     ```text
+     [ARTIFACT_APPROVAL_REQUEST]
+     ```
+     ```json
+     {
+       "type": "ARTIFACT_APPROVAL_REQUEST",
+       "artifact_name": "deployment-issue.md",
+       "artifact_path": "<appDataDir>/brain/<conversation-id>/deployment-issue.md",
+       "stage": "DEPLOYMENT",
+       "summary": "Local deployment issue diagnosis and remediation options",
+       "user_facing": true
+     }
+     ```
+     Enter idle state and await reactive wakeup upon receiving `[ARTIFACT_APPROVAL_RESPONSE]`.
+   - **Standalone Fallback Mode**:
+     If running standalone without a caller, write the artifact using `write_file` with `ArtifactMetadata={"RequestFeedback": True, "UserFacing": True, "Summary": "Local deployment issue diagnosis and remediation options for user approval"}` as the sole and final tool call of the turn.
 
 ### Step 3: Interactive Approval & Solution Selection
-When the user responds at the approval gate:
+When user response is received via `[ARTIFACT_APPROVAL_RESPONSE]` (or gate response in standalone mode):
 - **On User Rejection**:
   Stop deployment, report failure to `@coding`, and halt execution.
 - **On User Approval**:
