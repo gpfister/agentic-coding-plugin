@@ -308,3 +308,91 @@ def test_coding_merge_pr_waiting_and_sync():
     assert "compare" in content
     assert "github.com" in content
     assert "MergeReport" in content
+
+
+def test_coding_orchestrator_dual_mode_classification():
+    """Verify @coding is classified as a Dual-Mode Orchestrator across rules, agent definitions, and skills."""
+    files_to_check = [
+        PLUGIN_ROOT / "rules" / "AGENTS.md",
+        PLUGIN_ROOT / "agents" / "coding" / "agent.md",
+        PLUGIN_ROOT / "skills" / "coding-orchestrator" / "SKILL.md",
+        PLUGIN_ROOT / "agents" / "agent.md",
+    ]
+    for file_path in files_to_check:
+        assert file_path.exists(), f"{file_path} must exist"
+        content = file_path.read_text(encoding="utf-8")
+        assert "Dual-Mode" in content, f"'Dual-Mode' missing in {file_path.name}"
+        assert "Subagent Mode" in content, f"'Subagent Mode' missing in {file_path.name}"
+        assert "Standalone Mode" in content, f"'Standalone Mode' missing in {file_path.name}"
+        assert "caller_id" in content, f"'caller_id' missing in {file_path.name}"
+
+
+def test_coding_orchestrator_multi_hop_relay_contracts():
+    """Verify Multi-Hop Relay contracts and timeout mitigation instructions for @coding in Subagent Mode."""
+    files_to_check = [
+        PLUGIN_ROOT / "rules" / "AGENTS.md",
+        PLUGIN_ROOT / "agents" / "coding" / "agent.md",
+        PLUGIN_ROOT / "skills" / "coding-orchestrator" / "SKILL.md",
+        PLUGIN_ROOT / "agents" / "agent.md",
+    ]
+    for file_path in files_to_check:
+        assert file_path.exists(), f"{file_path} must exist"
+        content = file_path.read_text(encoding="utf-8")
+        assert "[ARTIFACT_APPROVAL_REQUEST]" in content, f"[ARTIFACT_APPROVAL_REQUEST] missing in {file_path.name}"
+        assert "[ARTIFACT_APPROVAL_RESPONSE]" in content, f"[ARTIFACT_APPROVAL_RESPONSE] missing in {file_path.name}"
+        assert "[QUESTION_RELAY_REQUEST]" in content, f"[QUESTION_RELAY_REQUEST] missing in {file_path.name}"
+        assert "[QUESTION_RELAY_RESPONSE]" in content, f"[QUESTION_RELAY_RESPONSE] missing in {file_path.name}"
+        assert "caller_id" in content, f"'caller_id' missing in {file_path.name}"
+        assert "send_message" in content, f"'send_message' missing in {file_path.name}"
+
+    # Specific negative constraints in Subagent Mode
+    coding_agent = (PLUGIN_ROOT / "agents" / "coding" / "agent.md").read_text(encoding="utf-8")
+    assert "MUST NOT" in coding_agent or "must not" in coding_agent.lower()
+    assert "write_file(RequestFeedback=True)" in coding_agent
+
+    coding_skill = (PLUGIN_ROOT / "skills" / "coding-orchestrator" / "SKILL.md").read_text(encoding="utf-8")
+    assert "MUST NOT" in coding_skill or "must not" in coding_skill.lower()
+    assert "write_file(RequestFeedback=True)" in coding_skill
+
+    rules_content = (PLUGIN_ROOT / "rules" / "AGENTS.md").read_text(encoding="utf-8")
+    assert "write_file(RequestFeedback=True)" in rules_content
+
+
+def test_coding_orchestrator_anti_direct_coding_guardrails():
+    """Verify that @coding has hard negative constraints against directly mutating source code, configs, Makefiles, or test suites."""
+    files_to_check = [
+        PLUGIN_ROOT / "agents" / "coding" / "agent.md",
+        PLUGIN_ROOT / "skills" / "coding-orchestrator" / "SKILL.md",
+    ]
+    for file_path in files_to_check:
+        assert file_path.exists(), f"{file_path} must exist"
+        content = file_path.read_text(encoding="utf-8")
+        assert "meta-orchestrator" in content.lower(), f"'meta-orchestrator' missing in {file_path.name}"
+        assert "source code" in content.lower(), f"'source code' missing in {file_path.name}"
+        assert "write_file" in content, f"'write_file' missing in {file_path.name}"
+        assert "run_command" in content, f"'run_command' missing in {file_path.name}"
+        assert "@coding-develop" in content, f"'@coding-develop' missing in {file_path.name}"
+        assert "@coding-deploy" in content, f"'@coding-deploy' missing in {file_path.name}"
+        assert "@coding-review" in content, f"'@coding-review' missing in {file_path.name}"
+        assert "@coding-merge" in content, f"'@coding-merge' missing in {file_path.name}"
+
+    # Verify tool privilege model in agents/agent.md documents constrained tool usage
+    agent_catalog = (PLUGIN_ROOT / "agents" / "agent.md").read_text(encoding="utf-8")
+    assert "write_file strictly" in agent_catalog or "write_file is strictly restricted" in agent_catalog
+    assert "run_command" in agent_catalog
+
+
+def test_coding_orchestrator_pre_clarified_fast_path():
+    """Verify that @coding documents pre-clarified fast-path bypassing Phase 1 while strictly preserving Phase 2/3 gates."""
+    files_to_check = [
+        PLUGIN_ROOT / "agents" / "coding" / "agent.md",
+        PLUGIN_ROOT / "skills" / "coding-orchestrator" / "SKILL.md",
+        PLUGIN_ROOT / "agents" / "agent.md",
+    ]
+    for file_path in files_to_check:
+        assert file_path.exists(), f"{file_path} must exist"
+        content = file_path.read_text(encoding="utf-8")
+        assert "Fast-Path" in content or "fast-path" in content, f"'Fast-Path' missing in {file_path.name}"
+        assert "coding-clarify" in content, f"'coding-clarify' missing in {file_path.name}"
+        assert "coding-specify" in content, f"'coding-specify' missing in {file_path.name}"
+        assert "coding-plan" in content, f"'coding-plan' missing in {file_path.name}"

@@ -48,7 +48,7 @@ Subagents are discovered dynamically and registered via `define_subagent` (or `d
 
 | Agent Handle | Directory | `enable_write_tools` | `enable_subagent_tools` | `enable_mcp_tools` | Allowed Tools | Primary Responsibility |
 | :--- | :--- | :---: | :---: | :---: | :--- | :--- |
-| **`@coding`** | [`agents/coding/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding/) | `True` | `True` | `True` | `invoke_subagent`, `send_message`, `manage_subagents`, `ask_question`, `read_file`, `write_file`, `list_dir`, `run_command` | 7-stage lifecycle pipeline orchestration |
+| **`@coding`** | [`agents/coding/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding/) | `True` | `True` | `True` | `invoke_subagent`, `send_message`, `manage_subagents`, `ask_question`, `read_file`, `write_file`, `list_dir`, `run_command` | Dual-Mode 7-stage lifecycle pipeline orchestration with multi-hop relay and constrained tools (write_file strictly for standalone gates, run_command for status inspection) |
 | **`@coding-clarify`** | [`agents/coding-clarify/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-clarify/) | `False` | `False` | `True` | `ask_question`, `read_file`, `list_dir`, `search_web`, `send_message` | One-question-at-a-time requirement interrogation with Question Relay Protocol |
 | **`@coding-specify`** | [`agents/coding-specify/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-specify/) | `True` | `False` | `True` | `write_file`, `read_file`, `list_dir`, `search_web`, `send_message` | Specification authoring & interactive approval gate |
 | **`@coding-plan`** | [`agents/coding-plan/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-plan/) | `True` | `False` | `True` | `write_file`, `read_file`, `list_dir`, `run_command`, `send_message` | Multi-repo task breakdown, deployment assessment, & branch planning |
@@ -56,6 +56,19 @@ Subagents are discovered dynamically and registered via `define_subagent` (or `d
 | **`@coding-deploy`** | [`agents/coding-deploy/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-deploy/) | `True` | `True` | `True` | `run_command`, `read_file`, `list_dir`, `write_file`, `edit_file`, `ask_question`, `send_message`, `invoke_subagent` | Local deployment execution, health monitoring, error investigation & fix orchestration |
 | **`@coding-review`** | [`agents/coding-review/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-review/) | `True` | `False` | `True` | `read_file`, `list_dir`, `run_command`, `ask_question`, `send_message` | Deliverables and deployment verification against specification; merge confirmation relay |
 | **`@coding-merge`** | [`agents/coding-merge/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-merge/) | `True` | `False` | `True` | `run_command`, `read_file`, `list_dir`, `ask_question`, `send_message` | Local branch merge or remote Pull Request creation with Question Relay waiting gate and post-merge branch sync |
+
+### 1.3 Dual-Mode Orchestration & Anti-Direct-Coding Boundaries
+- **Pure Subagents vs Dual-Mode Orchestrator**:
+  - **Pure Subagents** (`@coding-clarify`, `@coding-specify`, `@coding-plan`, `@coding-develop`, `@coding-deploy`, `@coding-review`, `@coding-merge`): Strictly run under `@coding`. They never execute `ask_question` directly or author artifacts with `RequestFeedback=True` when under orchestrator control; all interactions are relayed via `[QUESTION_RELAY_REQUEST]` and `[ARTIFACT_APPROVAL_REQUEST]`.
+  - **Dual-Mode Orchestrator (`@coding`)**:
+    * **Subagent Mode (`caller_id` present)**: When `@coding` is invoked by an upstream orchestrator, it intercepts requests from child subagents and relays `[QUESTION_RELAY_REQUEST]` and `[ARTIFACT_APPROVAL_REQUEST]` upward to `caller_id` via `send_message`. It **MUST NOT** invoke `ask_question` or `write_file(RequestFeedback=True)`, avoiding background execution timeouts and duplicate interactive UI gates.
+    * **Standalone Mode (no `caller_id`)**: When invoked at the root session, `@coding` presents interactive approval gates via `write_file(RequestFeedback=True)` as the sole tool call of that turn, or prompts the user directly via `ask_question`.
+- **Anti-Direct-Coding Guardrails**:
+  - `@coding` is strictly a meta-orchestrator and **MUST NEVER** write, edit, or delete application source code, configuration files, Makefiles, build scripts, or test suites directly.
+  - `write_file` is strictly restricted to presenting interactive approval gates (`<appDataDir>/brain/<id>/*.md`) in Standalone Mode.
+  - `run_command` is strictly restricted to non-destructive workspace inspection queries (e.g. `git status`). All development is delegated strictly to `@coding-develop`.
+- **Pre-Clarified Fast-Path**:
+  - When `@coding` is invoked with pre-clarified requirements, an approved architecture document, or an approved issue assessment report, it skips Phase 1 (`coding-clarify`) and fast-paths directly to Phase 2 (`coding-specify`) or Phase 3 (`coding-plan`). Approval gates are strictly preserved before development.
 
 ---
 
@@ -90,7 +103,7 @@ coding-clarify ──> coding-specify ──> coding-plan ──> coding-develop
 - **Artifact Approval Relay Gate**:
   - `coding-specify` writes `specification.md` to disk without `RequestFeedback=True`.
   - Dispatches `[ARTIFACT_APPROVAL_REQUEST]` to `@coding` and awaits `[ARTIFACT_APPROVAL_RESPONSE]`.
-  - `@coding` presents the interactive modal to the user using `write_file(..., ArtifactMetadata={"RequestFeedback": True, "UserFacing": True})` as its sole tool call of that turn, avoiding subagent timeouts.
+  - In Subagent Mode, `@coding` forwards `[ARTIFACT_APPROVAL_REQUEST]` directly to `caller_id` via `send_message`. In Standalone Mode, `@coding` presents the interactive modal to the user using `write_file(..., ArtifactMetadata={"RequestFeedback": True, "UserFacing": True})` as its sole tool call of that turn, avoiding subagent timeouts.
   - `@coding` advances to Stage 3 (`coding-plan`) upon receiving approval (or routes to `coding-clarify` on rejection).
 
 ### Stage 3: Planning (`coding-plan`)
@@ -104,7 +117,7 @@ coding-clarify ──> coding-specify ──> coding-plan ──> coding-develop
 - **Artifact Approval Relay Gate**:
   - `coding-plan` writes `plan.md` to disk without `RequestFeedback=True`.
   - Dispatches `[ARTIFACT_APPROVAL_REQUEST]` to `@coding` and awaits `[ARTIFACT_APPROVAL_RESPONSE]`.
-  - `@coding` presents the interactive modal to the user using `write_file(..., ArtifactMetadata={"RequestFeedback": True, "UserFacing": True})` as its sole tool call of that turn.
+  - In Subagent Mode, `@coding` forwards `[ARTIFACT_APPROVAL_REQUEST]` directly to `caller_id` via `send_message`. In Standalone Mode, `@coding` presents the interactive modal to the user using `write_file(..., ArtifactMetadata={"RequestFeedback": True, "UserFacing": True})` as its sole tool call of that turn.
   - `@coding` advances to Stage 4 (`coding-develop`) upon receiving approval (or routes to `coding-clarify` on rejection).
 
 ### Stage 4: Development (`coding-develop`)
@@ -125,8 +138,8 @@ coding-clarify ──> coding-specify ──> coding-plan ──> coding-develop
   - If a deployment failure or unhealthy probe occurs:
     1. Investigate the failure and extract diagnostic evidence (logs, pod descriptions, events).
     2. Author a `Deployment Issue` artifact (`deployment-issue.md`) without `RequestFeedback=True` and dispatch `[ARTIFACT_APPROVAL_REQUEST]` to `@coding`.
-    3. `@coding` presents the artifact to the user via `write_file(..., ArtifactMetadata={"RequestFeedback": True, "UserFacing": True})` and relays `[ARTIFACT_APPROVAL_RESPONSE]`.
-    4. If approved: if multiple solutions were proposed, prompt the user to choose the desired fix (relaying via `[QUESTION_RELAY_REQUEST]` under `@coding`, or calling `ask_question` directly in standalone mode).
+    3. In Subagent Mode, `@coding` forwards `[ARTIFACT_APPROVAL_REQUEST]` directly to `caller_id` via `send_message`. In Standalone Mode, `@coding` presents the artifact to the user via `write_file(..., ArtifactMetadata={"RequestFeedback": True, "UserFacing": True})` and relays `[ARTIFACT_APPROVAL_RESPONSE]`.
+    4. If approved: if multiple solutions were proposed, prompt the user to choose the desired fix (relaying upward via `[QUESTION_RELAY_REQUEST]` in Subagent Mode, or calling `ask_question` directly in Standalone Mode).
     5. Invoke `coding-develop` to implement the approved fix.
     6. Re-deploy and verify health until clean or user aborts.
 - **Handoff**: Concludes with structured `DeployReport` JSON.
@@ -135,7 +148,7 @@ coding-clarify ──> coding-specify ──> coding-plan ──> coding-develop
 - **Objective**: Validate all deliverables against the original specification, verify cross-repo contract compatibility, and confirm that all required local deployments succeeded.
 - **Discrepancy Routing**:
   - If regressions or specification discrepancies are found: Route issues back to `coding-plan` via `@coding` with actionable feedback.
-  - If approved: Present validation summary to the user and request confirmation to proceed to merge (relaying via `[QUESTION_RELAY_REQUEST]` under `@coding`, or handled directly by `@coding` via `ask_question` in Phase 6).
+  - If approved: Present validation summary to the user and request confirmation to proceed to merge (relaying upward via `[QUESTION_RELAY_REQUEST]` in Subagent Mode, or handled directly by `@coding` via `ask_question` in Phase 6 in Standalone Mode).
 
 ### Stage 7: Release & Merge (`coding-merge`)
 - **Objective**: Safely integrate approved changes into repository release branches.
@@ -218,11 +231,10 @@ Dispatched by `@coding` back to the worker subagent:
    - Writes the artifact to disk (`<appDataDir>/brain/<conversation-id>/<artifact_name>.md`) using `write_file(..., Overwrite=True)` without `ArtifactMetadata` or with `RequestFeedback=False`.
    - Sends `[ARTIFACT_APPROVAL_REQUEST]` via `send_message(Recipient="<caller_id>", Message=...)`.
    - Enters `idle` state and awaits reactive wakeup upon receiving `[ARTIFACT_APPROVAL_RESPONSE]`.
-2. **Top-Level Orchestrator (`@coding`)**:
+2. **Orchestrator Handling (`@coding`)**:
    - Intercepts `[ARTIFACT_APPROVAL_REQUEST]`.
-   - Reads the artifact content from disk at `artifact_path`.
-   - Invokes `write_file(Path=artifact_path, Content=content, Overwrite=True, ArtifactMetadata={"RequestFeedback": True, "UserFacing": True, "Summary": summary})` as the **sole and final tool call of that turn**.
-   - Awaits user review at the root turn (no 60-second subagent timeout).
+   - **Subagent Mode (`caller_id` present)**: Forwards `[ARTIFACT_APPROVAL_REQUEST]` directly to `caller_id` via `send_message`. `@coding` **MUST NOT** invoke `write_file(RequestFeedback=True)` or present local approval gates. Halts turn immediately to await `[ARTIFACT_APPROVAL_RESPONSE]` from `caller_id`, then forwards it down to the child subagent.
+   - **Standalone Mode (no `caller_id`)**: Reads the artifact content from disk at `artifact_path` and invokes `write_file(Path=artifact_path, Content=content, Overwrite=True, ArtifactMetadata={"RequestFeedback": True, "UserFacing": True, "Summary": summary})` as the **sole and final tool call of that turn** without subagent timeouts.
    - Relays the user decision back to the subagent using `[ARTIFACT_APPROVAL_RESPONSE]`.
 3. **Standalone Fallback**:
    - If a subagent is invoked standalone without a caller ID, it writes the artifact directly with `ArtifactMetadata={"RequestFeedback": True, "UserFacing": True}` as its sole and final tool call.
@@ -250,7 +262,9 @@ Worker subagents do not execute interactive user prompts directly when managed b
   ```
 
 ### 5.2 Orchestrator Handling & Timeout Mitigation Patterns
-1. **Interactive Prompt Handling**: Upon receiving `[QUESTION_RELAY_REQUEST]`, the orchestrator parses the question, options, and context, calls `ask_question` at the top level, and immediately sends `[QUESTION_RELAY_RESPONSE]` with the user's answer back to the subagent.
+1. **Multi-Hop Question Relay Handling**:
+   - **Subagent Mode (`caller_id` present)**: Upon receiving `[QUESTION_RELAY_REQUEST]`, `@coding` forwards it upward to `caller_id` via `send_message` and yields turn immediately. `@coding` **MUST NOT** call `ask_question` directly. Once `[QUESTION_RELAY_RESPONSE]` is received from `caller_id`, `@coding` forwards it down to the child subagent.
+   - **Standalone Mode (no `caller_id`)**: Upon receiving `[QUESTION_RELAY_REQUEST]`, `@coding` parses the question, options, and context, calls `ask_question` directly at the top level, and immediately sends `[QUESTION_RELAY_RESPONSE]` with the user's answer back to the subagent.
 2. **Subagent Timeout Mitigation**:
    - Subagents blocked on interactive user questions risk timeouts or UI occlusion when running nested under orchestrators.
    - Elevating questions to the session root orchestrator ensures prompt rendering is visible to the user and avoids subagent timeouts.

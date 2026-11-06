@@ -47,6 +47,9 @@ This rule set applies whenever the `agentic-coding-plugin` is active in an Antig
 ---
 
 ## 6. Question Relay Protocol & Interactive Gates
+- **Dual-Mode Orchestration**: `@coding` operates as a **Dual-Mode Orchestrator**:
+  - **Subagent Mode (`caller_id` present)**: When `@coding` runs under an upstream caller, it **MUST NOT** execute `ask_question` directly. It intercepts `[QUESTION_RELAY_REQUEST]` messages from worker subagents (`@coding-clarify`, `@coding-deploy`, `@coding-review`, `@coding-merge`) and forwards them upward to `caller_id` via `send_message`. Upon receiving `[QUESTION_RELAY_RESPONSE]` from `caller_id`, it forwards the response down to the child subagent.
+  - **Standalone Mode (no `caller_id`)**: When `@coding` is invoked directly at the root session, it prompts the user directly via `ask_question` upon receiving `[QUESTION_RELAY_REQUEST]`, replying with `[QUESTION_RELAY_RESPONSE]\nAnswer: ...`.
 - **Question Delegation**: When running under `@coding` (caller ID present), worker subagents (`@coding-clarify`, `@coding-deploy`, `@coding-review`, `@coding-merge`) must not execute user-prompting tools (`ask_question`) directly.
 - **Contract Format**: Subagents must relay questions to the parent orchestrator using `send_message` with `[QUESTION_RELAY_REQUEST]\nQuestion: ...\nOptions: ...\nContext: ...`. The parent orchestrator prompts the user at the session root via `ask_question` and replies to the subagent with `[QUESTION_RELAY_RESPONSE]\nAnswer: ...`.
 - **Subagent Timeout Mitigation**: Relaying questions to the root orchestrator ensures prompt visibility in the main UI stream and mitigates subagent timeouts caused by deep nested interaction blocking.
@@ -55,14 +58,13 @@ This rule set applies whenever the `agentic-coding-plugin` is active in an Antig
 ---
 
 ## 7. Artifact Approval Relay Protocol & Approval Gates
+- **Dual-Mode Orchestration & Multi-Hop Relay**: `@coding` operates as a **Dual-Mode Orchestrator**:
+  - **Subagent Mode (`caller_id` present)**: When `@coding` runs under an upstream caller, it **MUST NOT** invoke `write_file(RequestFeedback=True)` or present local approval gates. It intercepts `[ARTIFACT_APPROVAL_REQUEST]` from worker subagents (`@coding-specify`, `@coding-plan`, `@coding-deploy`) and forwards the envelope directly to `caller_id` via `send_message`. `@coding` halts its turn immediately to await `[ARTIFACT_APPROVAL_RESPONSE]`, which it then forwards down to the requesting subagent. This guarantees a single interactive UI gate rendered exclusively at the session root, preventing duplicate approval modals and background 60-second subagent execution timeouts.
+  - **Standalone Mode (no `caller_id`)**: When `@coding` is invoked directly at the root session, it intercepts `[ARTIFACT_APPROVAL_REQUEST]`, inspects the artifact on disk, and presents it to the user by calling `write_file(Path=artifact_path, Content=..., Overwrite=True, ArtifactMetadata={"RequestFeedback": True, "UserFacing": True, "Summary": ...})` as the **sole and final tool call of that turn**.
 - **Artifact Approval Delegation**: When running under `@coding` (caller ID present), worker subagents (`@coding-specify`, `@coding-plan`, `@coding-deploy`) must NOT author artifacts with `RequestFeedback=True` directly. Doing so inside background worker processes triggers Antigravity's 60-second subagent execution timeout when users take longer than 60 seconds to review.
 - **Worker Execution Flow**:
   1. Author artifact directly to disk using `write_file(Path=artifact_path, Content=..., Overwrite=True)` without `ArtifactMetadata` or with `RequestFeedback=False`.
   2. Dispatch `[ARTIFACT_APPROVAL_REQUEST]` to `caller_id` via `send_message`.
   3. Enter idle state and await reactive wakeup upon receiving `[ARTIFACT_APPROVAL_RESPONSE]`.
-- **Orchestrator Handling (`@coding`)**:
-  1. Intercepts `[ARTIFACT_APPROVAL_REQUEST]`, inspects the artifact on disk, and presents it to the user by calling `write_file(Path=artifact_path, Content=..., Overwrite=True, ArtifactMetadata={"RequestFeedback": True, "UserFacing": True, "Summary": ...})` as the **sole and final tool call of that turn**.
-  2. Awaits interactive user decision at the session root without background execution timeouts.
-  3. Relays user outcome (`APPROVED` or `REJECTED` with feedback) back to the subagent using `[ARTIFACT_APPROVAL_RESPONSE]` via `send_message`.
 - **Standalone Fallback**: If a worker subagent is invoked as a standalone top-level agent without a caller ID, it authors the artifact directly with `RequestFeedback=True` as the sole and final tool call of the turn.
 

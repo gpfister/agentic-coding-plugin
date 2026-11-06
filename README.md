@@ -28,11 +28,32 @@ The `agentic-coding-plugin` coordinates a 7-stage development lifecycle:
 6. **Review (`@coding-review`)**: Audits changes and deployment health against specification and verifies tests.
 7. **Release & Merge (`@coding-merge`)**: Merges locally or creates GitHub pull requests after all development and deployment tasks complete.
 
+### Dual-Mode Orchestration & Multi-Hop Relay Protocol
+
+To eliminate duplicate interactive UI approval gates and the rigid **60-second runtime execution timeout** enforced on background subagents in Google Antigravity:
+- **Subagent Mode (`caller_id` present)**: When `@coding` is invoked by an upstream agent (e.g., `@coding-investigate`, `/project-grooming`, or root orchestrator), it acts as a child subagent. It **MUST NOT** invoke `write_file(RequestFeedback=True)` or `ask_question`. Instead, it operates as a **Multi-Hop Relay**: forwarding worker subagent `[ARTIFACT_APPROVAL_REQUEST]` and `[QUESTION_RELAY_REQUEST]` envelopes upward to `caller_id` via `send_message`, yielding immediately to await `[ARTIFACT_APPROVAL_RESPONSE]` or `[QUESTION_RELAY_RESPONSE]`, and routing responses downward to the waiting subagent.
+- **Standalone Mode (no `caller_id`)**: When `@coding` is invoked directly by the user at the session root, it acts as the primary gatekeeper: rendering `write_file(RequestFeedback=True)` directly as the sole and final tool call of that turn for artifact review, and calling `ask_question` directly for user clarification.
+
+### Hard Anti-Direct-Coding Guardrails
+
+To preserve architectural integrity and prevent the orchestrator from bypassing the 7-stage lifecycle upon receiving imperative fix requests:
+- `@coding` is strictly a meta-orchestrator and **MUST NEVER** write, edit, or delete application source code, configuration files, Makefiles, or test suites directly.
+- `write_file` is strictly restricted to presenting interactive milestone artifacts (`<appDataDir>/brain/<id>/*.md`) in Standalone Mode.
+- `run_command` is strictly restricted to read-only workspace inspection (`git status`).
+- 100% of implementation is delegated to `@coding-develop`, local deployment checks to `@coding-deploy`, code review to `@coding-review`, and merges/PRs to `@coding-merge`.
+
+### Pre-Clarified Fast-Path
+
+When `@coding` is invoked with pre-clarified requirements, an approved architecture document, or an approved issue assessment report from companion subagents:
+- Phase 1 (`coding-clarify`) is skipped automatically.
+- Workflow fast-paths directly to Phase 2 (`coding-specify`) or Phase 3 (`coding-plan`).
+- Formal approval gates (`specification.md`, `plan.md`) remain mandatory before any code development is initiated.
+
 ### Question Relay Protocol (Subagent User Inquiries)
 
 To eliminate the strict **60-second runtime execution timeout** enforced on background subagents in Google Antigravity:
-- Subagents (`@coding-clarify`, `@coding-deploy`, `@coding-review`) do not prompt the user directly via `ask_question`. Instead, they dispatch a structured `[QUESTION_RELAY_REQUEST]` envelope via `send_message` to the parent orchestrator (`@coding`) and enter an idle state.
-- The top-level orchestrator (`@coding`) intercepts the request, runs `ask_question` at the session root without host timeouts (allowing unlimited user deliberation time), and returns the selected answer in a `[QUESTION_RELAY_RESPONSE]` envelope.
+- Subagents (`@coding-clarify`, `@coding-deploy`, `@coding-review`, `@coding-merge`) do not prompt the user directly via `ask_question`. Instead, they dispatch a structured `[QUESTION_RELAY_REQUEST]` envelope via `send_message` to the parent orchestrator (`@coding`) and enter an idle state.
+- The top-level orchestrator (`@coding` in standalone mode, or root caller via multi-hop relay in subagent mode) intercepts the request, runs `ask_question` at the session root without host timeouts (allowing unlimited user deliberation time), and returns the selected answer in a `[QUESTION_RELAY_RESPONSE]` envelope.
 - The subagent wakes up reactively upon message delivery and advances its workflow.
 
 ### Companion Plugins & Ecosystem Subagents
