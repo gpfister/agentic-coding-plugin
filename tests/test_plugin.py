@@ -199,6 +199,13 @@ def test_subagents_frontmatter_and_permissions():
     assert "send_message" in review_tools, "coding-review must have 'send_message' tool"
     assert "ask_question" in review_tools, "coding-review must have 'ask_question' tool"
 
+    merge_md = PLUGIN_ROOT / "agents" / "coding-merge" / "agent.md"
+    meta_merge = parse_frontmatter(merge_md)
+    assert meta_merge.get("name") == "coding-merge"
+    merge_tools = meta_merge.get("tools", [])
+    assert "send_message" in merge_tools, "coding-merge must have 'send_message' tool"
+    assert "ask_question" in merge_tools, "coding-merge must have 'ask_question' tool"
+
 
 def test_coding_deploy_specifications():
     """Verify specific instructions in coding-deploy/agent.md."""
@@ -236,6 +243,7 @@ def test_question_relay_protocol_contracts():
         PLUGIN_ROOT / "agents" / "coding" / "agent.md",
         PLUGIN_ROOT / "agents" / "coding-deploy" / "agent.md",
         PLUGIN_ROOT / "agents" / "coding-review" / "agent.md",
+        PLUGIN_ROOT / "agents" / "coding-merge" / "agent.md",
         PLUGIN_ROOT / "skills" / "coding-orchestrator" / "SKILL.md",
         PLUGIN_ROOT / "rules" / "AGENTS.md",
         PLUGIN_ROOT / "agents" / "agent.md",
@@ -285,3 +293,18 @@ def test_artifact_approval_relay_protocol_contracts():
     assert "Artifact Approval Relay Protocol" in rules_content
     assert "Section 7" in rules_content or "## 7." in rules_content
 
+
+def test_coding_merge_pr_waiting_and_sync():
+    """Verify that coding-merge includes PR creation, waiting gate, compare fallback, and post-merge cleanup."""
+    merge_md = PLUGIN_ROOT / "agents" / "coding-merge" / "agent.md"
+    assert merge_md.exists()
+    content = merge_md.read_text(encoding="utf-8")
+    assert "gh pr create" in content
+    assert "gh pr view" in content
+    assert "[QUESTION_RELAY_REQUEST]" in content
+    assert "[QUESTION_RELAY_RESPONSE]" in content
+    assert "git pull --ff-only" in content
+    assert "git branch -d" in content
+    assert "compare" in content
+    assert "github.com" in content
+    assert "MergeReport" in content

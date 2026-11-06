@@ -76,7 +76,7 @@ flowchart TD
     InvokeDocPreMerge --> P7Merge
 
     %% Phase 7: Release & Merge
-    P7Merge --> ExecMerge["Wait for all develop & deploy<br/>Execute git merge or open GitHub PR"]
+    P7Merge --> ExecMerge["Wait for all develop & deploy<br/>Execute git merge or open GitHub PR with waiting gate"]
     ExecMerge --> DocPostMergeCheck{"agentic-project-documenting-plugin<br/>installed?"}
     DocPostMergeCheck -->|"Yes"| InvokeDocPostMerge["Invoke @coding-document<br/>(Post-merge: update git status, branch tracking & changelogs)"]
     DocPostMergeCheck -->|"No"| Complete(["Workflow Completed"])
@@ -125,12 +125,15 @@ flowchart TD
    - **Pre-Merge Documentation (Tidy Up)**: If `agentic-project-documenting-plugin` is installed, invoke `@coding-document` prior to merging to tidy up project and feature documentation, architecture diagrams, and ADRs.
 7. **`coding-merge`**:
    - Waits for all `coding-develop` and all `coding-deploy` to complete successfully.
-   - Automatically merges locally or opens a Pull Request with `gh` if remote exists.
+   - **Local Release**: Merges locally (`git merge <branch>`) when no remote exists.
+   - **Remote Release**: Pushes branch (`git push -u origin <branch>`), checks `gh auth status`, and creates Pull Request (`gh pr create`). If `gh` is unauthenticated or missing, generates GitHub web compare URL (`https://github.com/<owner>/<repo>/compare/<base>...<branch>?expand=1`) and delegates instructions to `@coding` via Question Relay Protocol.
+   - **Hybrid PR Waiting Gate**: Inspects PR status via `gh pr view <pr_number> --json state,reviewDecision,mergedAt,url`. To avoid Antigravity 60-second subagent timeouts, delegates waiting choices to the parent orchestrator via `[QUESTION_RELAY_REQUEST]` without blocking or sleeping in a loop.
+   - **Post-Merge Base Synchronization & Local Cleanup**: When PR is merged, fast-forwards base branch (`git checkout <base>`, `git pull --ff-only origin <base>`), and safely removes local branch (`git branch -d <branch>`).
    - **Post-Merge Documentation (At the End)**: If `agentic-project-documenting-plugin` is installed, invoke `@coding-document` at the end to update git status, branch states, and changelogs in the Obsidian vault.
 
 ## Question Relay Protocol & Subagent Timeout Mitigation
 
-Worker subagents do not execute interactive user prompts directly when managed by `@coding`. Instead, they delegate interactive user queries to the parent orchestrator using structured message contracts:
+Worker subagents (`@coding-clarify`, `@coding-deploy`, `@coding-review`, `@coding-merge`) do not execute interactive user prompts directly when managed by `@coding`. Instead, they delegate interactive user queries to the parent orchestrator using structured message contracts:
 
 ### 1. Protocol Contracts
 - **Relay Request (`Subagent -> @coding`)**:
