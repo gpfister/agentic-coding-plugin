@@ -24,16 +24,22 @@ flowchart TD
     AmbiguityCheck -->|"No / Clarified"| P2["Phase 2: Specification<br/>(@coding-specify)"]
 
     %% Phase 2: Specification
-    P2 --> SpecArtifact["Write specification.md<br/>(RequestFeedback=True, sole tool call)"]
-    SpecArtifact --> IdleSpec["Enter IDLE State<br/>(Wait for User Gate Decision)"]
-    IdleSpec --> SpecGate{"User Decision on<br/>specification.md?"}
-    SpecGate -->|"[GATE_APPROVED]"| P3["Phase 3: Planning<br/>(@coding-plan)"]
+    P2 --> SpecSubagent["Write specification.md to disk<br/>Relay [ARTIFACT_APPROVAL_REQUEST]"]
+    SpecSubagent --> SpecGateRoot["@coding calls write_file<br/>(RequestFeedback=True, sole tool call)"]
+    SpecGateRoot --> SpecGate{"User Decision on<br/>specification.md?"}
+    SpecGate -->|"Approved"| SpecApproved["Relay [ARTIFACT_APPROVAL_RESPONSE: APPROVED]<br/>Advance to Phase 3"]
+    SpecGate -->|"Rejected"| SpecRejected["Relay [ARTIFACT_APPROVAL_RESPONSE: REJECTED]<br/>Route back to Phase 1"]
+    SpecApproved --> P3["Phase 3: Planning<br/>(@coding-plan)"]
+    SpecRejected --> P1
 
     %% Phase 3: Planning
-    P3 --> PlanArtifact["Write plan.md<br/>(RequestFeedback=True, sole tool call)"]
-    PlanArtifact --> IdlePlan["Enter IDLE State<br/>(Wait for User Gate Decision)"]
-    IdlePlan --> PlanGate{"User Decision on<br/>plan.md?"}
-    PlanGate -->|"[GATE_APPROVED]"| DocPlanCheck{"agentic-project-documenting-plugin<br/>installed?"}
+    P3 --> PlanSubagent["Write plan.md to disk<br/>Relay [ARTIFACT_APPROVAL_REQUEST]"]
+    PlanSubagent --> PlanGateRoot["@coding calls write_file<br/>(RequestFeedback=True, sole tool call)"]
+    PlanGateRoot --> PlanGate{"User Decision on<br/>plan.md?"}
+    PlanGate -->|"Approved"| PlanApproved["Relay [ARTIFACT_APPROVAL_RESPONSE: APPROVED]"]
+    PlanGate -->|"Rejected"| PlanRejected["Relay [ARTIFACT_APPROVAL_RESPONSE: REJECTED]<br/>Route back to Phase 1"]
+    PlanRejected --> P1
+    PlanApproved --> DocPlanCheck{"agentic-project-documenting-plugin<br/>installed?"}
     DocPlanCheck -->|"Yes"| InvokeDocPlan["Invoke @coding-document<br/>(Document architecture plan & ADRs)"]
     DocPlanCheck -->|"No"| P4["Phase 4: Development<br/>(@coding-develop)"]
     InvokeDocPlan --> P4
@@ -49,8 +55,9 @@ flowchart TD
     P5Deploy --> DeployRun["Execute local deploy & monitor health"]
     DeployRun --> DeploySuccess{"Deployment<br/>Successful?"}
     DeploySuccess -->|"Yes"| JoinDevDeploy
-    DeploySuccess -->|"Error"| DeployIssueArtifact["Investigate error & author<br/>Deployment Issue artifact<br/>(RequestFeedback=True)"]
-    DeployIssueArtifact --> DeployGate{"User Decision on<br/>Deployment Issue?"}
+    DeploySuccess -->|"Error"| DeployIssueSubagent["Investigate error, write deployment-issue.md<br/>Relay [ARTIFACT_APPROVAL_REQUEST]"]
+    DeployIssueSubagent --> DeployIssueRoot["@coding calls write_file<br/>(RequestFeedback=True, sole tool call)"]
+    DeployIssueRoot --> DeployGate{"User Decision on<br/>Deployment Issue?"}
     DeployGate -->|"Approved"| MultiSolCheck{"Multiple solutions<br/>proposed?"}
     MultiSolCheck -->|"Yes"| AskSol["Relay solution choice<br/>([QUESTION_RELAY_REQUEST] -> ask_question<br/>-> [QUESTION_RELAY_RESPONSE])"]
     MultiSolCheck -->|"Single"| InvokeFixDev["Invoke @coding-develop<br/>to implement fix"]
@@ -69,7 +76,7 @@ flowchart TD
     InvokeDocPreMerge --> P7Merge
 
     %% Phase 7: Release & Merge
-    P7Merge --> ExecMerge["Wait for all develop & deploy<br/>Execute git merge or open GitHub PR"]
+    P7Merge --> ExecMerge["Wait for all develop & deploy<br/>Execute git merge or open GitHub PR with waiting gate"]
     ExecMerge --> DocPostMergeCheck{"agentic-project-documenting-plugin<br/>installed?"}
     DocPostMergeCheck -->|"Yes"| InvokeDocPostMerge["Invoke @coding-document<br/>(Post-merge: update git status, branch tracking & changelogs)"]
     DocPostMergeCheck -->|"No"| Complete(["Workflow Completed"])
@@ -89,16 +96,18 @@ flowchart TD
    - Clarifies edge cases, non-goals, and dependencies one question at a time using the Question Relay Protocol (`[QUESTION_RELAY_REQUEST]` / `[QUESTION_RELAY_RESPONSE]`).
    - Advances directly to `coding-specify` once all ambiguities are resolved.
 2. **`coding-specify`**:
-   - Synthesizes findings into `specification.md` (Artifact with `RequestFeedback=True` as sole tool call).
-   - Awaits interactive user approval in the background (`idle` state).
-   - **Idle Guard**: Orchestrator ignores `has gone idle` platform notifications, halts turn execution without calling tools, and awaits explicit subagent approval message.
-   - Advances to `coding-plan` ONLY upon receiving explicit `[GATE_APPROVED] specification.md:` message from `coding-specify` (or routes to `coding-clarify` on `[GATE_REJECTED]`).
+   - Synthesizes findings into `specification.md` and writes it to disk without `RequestFeedback=True`.
+   - Dispatches `[ARTIFACT_APPROVAL_REQUEST]` to `@coding`.
+   - Orchestrator inspects the artifact on disk and executes `write_file(..., ArtifactMetadata={"RequestFeedback": True, "UserFacing": True})` as its sole tool call of that turn to present the interactive modal to the user without subagent timeouts.
+   - Upon user decision, orchestrator dispatches `[ARTIFACT_APPROVAL_RESPONSE]` back to `coding-specify`.
+   - Advances to `coding-plan` on approval (or routes to `coding-clarify` on rejection).
 3. **`coding-plan`**:
    - Decomposes work per repository and determines branch names (`feature/*`, `task/*`, `bugfix/*`).
    - Assesses if local deployment is required for each repository (Docker, Docker Compose, Terraform to local Kubernetes/Minikube, scripts).
-   - Produces `plan.md` (Artifact with `RequestFeedback=True` as sole tool call) and awaits user approval in the background (`idle` state).
-   - **Idle Guard**: Orchestrator ignores `has gone idle` platform notifications, halts turn execution without calling tools, and awaits explicit subagent approval message.
-   - Advances to `coding-develop` ONLY upon receiving explicit `[GATE_APPROVED] plan.md:` message from `coding-plan` (or routes to `coding-clarify` on `[GATE_REJECTED]`).
+   - Produces `plan.md` on disk without `RequestFeedback=True` and dispatches `[ARTIFACT_APPROVAL_REQUEST]` to `@coding`.
+   - Orchestrator inspects the artifact on disk and executes `write_file(..., ArtifactMetadata={"RequestFeedback": True, "UserFacing": True})` as its sole tool call of that turn.
+   - Upon user decision, orchestrator dispatches `[ARTIFACT_APPROVAL_RESPONSE]` back to `coding-plan`.
+   - Advances to `coding-develop` on approval (or routes to `coding-clarify` on rejection).
    - **Post-Plan Approval Documentation**: If `agentic-project-documenting-plugin` is installed, invoke `@coding-document` after plan approval to document architecture plans, work breakdowns, and formalize ADRs.
 4. **`coding-develop`**:
    - Fanned out in parallel per repository (`coding-develop-<repo>`).
@@ -106,7 +115,8 @@ flowchart TD
    - Generates `DevelopReport`. Triggers `coding-deploy` immediately for repos with local deployment instructions.
 5. **`coding-deploy`**:
    - Runs local deployment and actively monitors container health, pod states, and service endpoints.
-   - On error, diagnoses root cause, creates `Deployment Issue` artifact (`deployment-issue.md`, `RequestFeedback=True`), and awaits user approval.
+   - On error, diagnoses root cause, writes `Deployment Issue` artifact (`deployment-issue.md`) without `RequestFeedback=True`, and dispatches `[ARTIFACT_APPROVAL_REQUEST]` to `@coding`.
+   - Orchestrator calls `write_file(..., ArtifactMetadata={"RequestFeedback": True, "UserFacing": True})` as its sole tool call and returns `[ARTIFACT_APPROVAL_RESPONSE]` to `coding-deploy`.
    - If approved with multiple options, relays question to the user via `[QUESTION_RELAY_REQUEST]`.
    - Invokes `coding-develop` to implement the approved fix, then re-deploys and monitors.
 6. **`coding-review`**:
@@ -115,12 +125,15 @@ flowchart TD
    - **Pre-Merge Documentation (Tidy Up)**: If `agentic-project-documenting-plugin` is installed, invoke `@coding-document` prior to merging to tidy up project and feature documentation, architecture diagrams, and ADRs.
 7. **`coding-merge`**:
    - Waits for all `coding-develop` and all `coding-deploy` to complete successfully.
-   - Automatically merges locally or opens a Pull Request with `gh` if remote exists.
+   - **Local Release**: Merges locally (`git merge <branch>`) when no remote exists.
+   - **Remote Release**: Pushes branch (`git push -u origin <branch>`), checks `gh auth status`, and creates Pull Request (`gh pr create`). If `gh` is unauthenticated or missing, generates GitHub web compare URL (`https://github.com/<owner>/<repo>/compare/<base>...<branch>?expand=1`) and delegates instructions to `@coding` via Question Relay Protocol.
+   - **Hybrid PR Waiting Gate**: Inspects PR status via `gh pr view <pr_number> --json state,reviewDecision,mergedAt,url`. To avoid Antigravity 60-second subagent timeouts, delegates waiting choices to the parent orchestrator via `[QUESTION_RELAY_REQUEST]` without blocking or sleeping in a loop.
+   - **Post-Merge Base Synchronization & Local Cleanup**: When PR is merged, fast-forwards base branch (`git checkout <base>`, `git pull --ff-only origin <base>`), and safely removes local branch (`git branch -d <branch>`).
    - **Post-Merge Documentation (At the End)**: If `agentic-project-documenting-plugin` is installed, invoke `@coding-document` at the end to update git status, branch states, and changelogs in the Obsidian vault.
 
 ## Question Relay Protocol & Subagent Timeout Mitigation
 
-Worker subagents do not execute interactive user prompts directly when managed by `@coding`. Instead, they delegate interactive user queries to the parent orchestrator using structured message contracts:
+Worker subagents (`@coding-clarify`, `@coding-deploy`, `@coding-review`, `@coding-merge`) do not execute interactive user prompts directly when managed by `@coding`. Instead, they delegate interactive user queries to the parent orchestrator using structured message contracts:
 
 ### 1. Protocol Contracts
 - **Relay Request (`Subagent -> @coding`)**:
@@ -146,12 +159,54 @@ Worker subagents do not execute interactive user prompts directly when managed b
    - Subagents maintain execution state cleanly, awaiting the single `[QUESTION_RELAY_RESPONSE]` message.
 3. **Standalone Fallback**: Subagents maintain a fallback to invoke `ask_question` directly when invoked standalone outside of the `@coding` orchestrator.
 
-## Interactive Approval Gate & Idle Guard Protocol
+## Artifact Approval Relay Protocol & Approval Gates
 
-- `coding-specify`, `coding-plan`, and `coding-deploy` write artifacts (`specification.md`, `plan.md`, `deployment-issue.md`) with `RequestFeedback=True` as their sole and final tool call, entering `idle` state.
-- When Antigravity notifies `Subagent <id> has gone idle`, the orchestrator **MUST NOT** proceed to the next stage. It terminates its turn immediately without calling tools.
-- Advancement to Stage 3 or Stage 4 requires an explicit message starting with `[GATE_APPROVED]` (e.g. `[GATE_APPROVED] specification.md:` or `[GATE_APPROVED] plan.md:`).
-- Rejection or change requests starting with `[GATE_REJECTED]` route back to `coding-clarify`.
+To prevent background worker subagents from terminating due to Antigravity's 60-second subagent execution timeout when users review artifacts, artifact approval gates are relayed to the top-level orchestrator:
+
+### 1. Protocol Envelopes
+- **Approval Request (`Subagent -> @coding`)**:
+  ```text
+  [ARTIFACT_APPROVAL_REQUEST]
+  ```
+  ```json
+  {
+    "type": "ARTIFACT_APPROVAL_REQUEST",
+    "artifact_name": "specification.md",
+    "artifact_path": "/Users/user/.gemini/antigravity/brain/<session-id>/specification.md",
+    "stage": "SPECIFICATION",
+    "summary": "Detailed technical specification for feature XYZ",
+    "user_facing": true
+  }
+  ```
+- **Approval Response (`@coding -> Subagent`)**:
+  ```text
+  [ARTIFACT_APPROVAL_RESPONSE]
+  ```
+  ```json
+  {
+    "type": "ARTIFACT_APPROVAL_RESPONSE",
+    "artifact_name": "specification.md",
+    "status": "APPROVED",
+    "feedback": ""
+  }
+  ```
+
+### 2. Orchestrator Handling Lifecycle
+When `@coding` receives an `[ARTIFACT_APPROVAL_REQUEST]`:
+1. **Inspect Artifact**: Read and inspect the artifact file at `artifact_path` on disk.
+2. **Present Gate to User**: Call `write_file(Path=artifact_path, Content=content, Overwrite=True, ArtifactMetadata={"RequestFeedback": True, "UserFacing": True, "Summary": summary})` as the **sole and final tool call of that turn**.
+3. **User Deliberation**: The orchestrator awaits user interaction (interactive Approve / Reject buttons). Because the orchestrator runs at the root session level, it is not subject to the 60-second subagent execution timeout.
+4. **Relay Decision**: Upon receiving the user's decision:
+   - On Approval: Dispatch `[ARTIFACT_APPROVAL_RESPONSE]` with `"status": "APPROVED"` to the worker subagent via `send_message`.
+   - On Rejection / Feedback: Dispatch `[ARTIFACT_APPROVAL_RESPONSE]` with `"status": "REJECTED"` and `"feedback": "<comments>"` to the worker subagent via `send_message`.
+5. **Stage Progression**:
+   - For `specification.md`: on approval, advance to `coding-plan`; on rejection, route back to `coding-clarify`.
+   - For `plan.md`: on approval, advance to `coding-develop`; on rejection, route back to `coding-clarify`.
+   - For `deployment-issue.md`: on approval, handle solution selection and invoke `coding-develop`.
+
+### 3. Idle Guard
+- If a subagent enters `idle` while waiting for an approval response, Antigravity notifies `Subagent <id> has gone idle`.
+- The orchestrator **MUST NOT** proceed to the next stage upon receiving `has gone idle`. It terminates its turn immediately without calling tools until the user responds.
 
 ## Triggering the Workflow
 

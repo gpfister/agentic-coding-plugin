@@ -36,9 +36,28 @@ Convert approved specifications into an executable, multi-repo implementation pl
    - If local deployment instructions are present, add an explicit **Local Deployment (`coding-deploy`)** step in `plan.md` for that repository, detailing the deployment method, commands to run, and health verification checks (probes/endpoints).
    - Note in `plan.md` that for each repository requiring deployment, `coding-deploy` will trigger immediately after that repository's `coding-develop` step concludes.
    - If no local deployment instructions exist for a repository, explicitly record `Local Deployment: Not Required`.
-5. Write the artifact as `plan.md` using `write_file` with `ArtifactMetadata={"RequestFeedback": True, "UserFacing": True}` as the sole and final tool call of the turn. End your turn immediately without calling secondary tools so Antigravity enters `idle` and presents the interactive Approve / Reject buttons.
-6. When the user interacts with the approval gate, Antigravity wakes you up with the user's decision:
-   - On user approval (`[Approved] plan.md` or "The user has approved this document"):
-     Call `send_message(Recipient="<orchestrator_id>", Message="[GATE_APPROVED] plan.md: User has approved the implementation plan. Proceed to coding-develop.")`.
-   - On user rejection or feedback:
-     Call `send_message(Recipient="<orchestrator_id>", Message="[GATE_REJECTED] plan.md: <User Feedback>")`.
+5. **Artifact Creation & Approval Relay**:
+   - Write the artifact to disk at `<appDataDir>/brain/<conversation-id>/plan.md` using `write_file(Path=..., Content=..., Overwrite=True)` without `ArtifactMetadata` or without `RequestFeedback=True`.
+   - **Subagent Mode (Artifact Approval Relay Protocol)**:
+     When running under `@coding` (caller ID present), do NOT call `write_file` with `RequestFeedback=True` to avoid the 60-second subagent timeout. Dispatch `[ARTIFACT_APPROVAL_REQUEST]` to `caller_id` via `send_message`:
+     ```text
+     [ARTIFACT_APPROVAL_REQUEST]
+     ```
+     ```json
+     {
+       "type": "ARTIFACT_APPROVAL_REQUEST",
+       "artifact_name": "plan.md",
+       "artifact_path": "<appDataDir>/brain/<conversation-id>/plan.md",
+       "stage": "PLANNING",
+       "summary": "Implementation plan and multi-repo work breakdown",
+       "user_facing": true
+     }
+     ```
+     Enter idle state and await reactive wakeup upon receiving `[ARTIFACT_APPROVAL_RESPONSE]`.
+   - **Standalone Fallback Mode**:
+     If invoked directly without a caller ID, write the artifact using `write_file` with `ArtifactMetadata={"RequestFeedback": True, "UserFacing": True}` as the sole and final tool call of the turn.
+6. **Approval Handling**:
+   - Upon receiving `[ARTIFACT_APPROVAL_RESPONSE]` with `"status": "APPROVED"` (or gate approval message in standalone mode):
+     Report successful plan completion to `@coding` (e.g. `send_message(Recipient="<caller_id>", Message="[GATE_APPROVED] plan.md: User has approved the implementation plan.")`).
+   - Upon receiving `[ARTIFACT_APPROVAL_RESPONSE]` with `"status": "REJECTED"`:
+     Incorporate feedback into `plan.md`, or notify `@coding` with feedback to route back to `coding-clarify`.

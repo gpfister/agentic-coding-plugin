@@ -10,6 +10,7 @@ tools:
   - manage_subagents
   - ask_question
   - read_file
+  - write_file
   - list_dir
   - run_command
 ---
@@ -36,16 +37,22 @@ flowchart TD
     AmbiguityCheck -->|"No / Clarified"| P2["Phase 2: Specification<br/>(@coding-specify)"]
 
     %% Phase 2: Specification
-    P2 --> SpecArtifact["Write specification.md<br/>(RequestFeedback=True, sole tool call)"]
-    SpecArtifact --> IdleSpec["Enter IDLE State<br/>(Wait for User Gate Decision)"]
-    IdleSpec --> SpecGate{"User Decision on<br/>specification.md?"}
-    SpecGate -->|"[GATE_APPROVED]"| P3["Phase 3: Planning<br/>(@coding-plan)"]
+    P2 --> SpecSubagent["Write specification.md to disk<br/>Relay [ARTIFACT_APPROVAL_REQUEST]"]
+    SpecSubagent --> SpecGateRoot["@coding calls write_file<br/>(RequestFeedback=True, sole tool call)"]
+    SpecGateRoot --> SpecGate{"User Decision on<br/>specification.md?"}
+    SpecGate -->|"Approved"| SpecApproved["Relay [ARTIFACT_APPROVAL_RESPONSE: APPROVED]<br/>Advance to Phase 3"]
+    SpecGate -->|"Rejected"| SpecRejected["Relay [ARTIFACT_APPROVAL_RESPONSE: REJECTED]<br/>Route back to Phase 1"]
+    SpecApproved --> P3["Phase 3: Planning<br/>(@coding-plan)"]
+    SpecRejected --> P1
 
     %% Phase 3: Planning
-    P3 --> PlanArtifact["Write plan.md<br/>(RequestFeedback=True, sole tool call)"]
-    PlanArtifact --> IdlePlan["Enter IDLE State<br/>(Wait for User Gate Decision)"]
-    IdlePlan --> PlanGate{"User Decision on<br/>plan.md?"}
-    PlanGate -->|"[GATE_APPROVED]"| DocPlanCheck{"agentic-project-documenting-plugin<br/>installed?"}
+    P3 --> PlanSubagent["Write plan.md to disk<br/>Relay [ARTIFACT_APPROVAL_REQUEST]"]
+    PlanSubagent --> PlanGateRoot["@coding calls write_file<br/>(RequestFeedback=True, sole tool call)"]
+    PlanGateRoot --> PlanGate{"User Decision on<br/>plan.md?"}
+    PlanGate -->|"Approved"| PlanApproved["Relay [ARTIFACT_APPROVAL_RESPONSE: APPROVED]"]
+    PlanGate -->|"Rejected"| PlanRejected["Relay [ARTIFACT_APPROVAL_RESPONSE: REJECTED]<br/>Route back to Phase 1"]
+    PlanRejected --> P1
+    PlanApproved --> DocPlanCheck{"agentic-project-documenting-plugin<br/>installed?"}
     DocPlanCheck -->|"Yes"| InvokeDocPlan["Invoke @coding-document<br/>(Document architecture plan & ADRs)"]
     DocPlanCheck -->|"No"| P4["Phase 4: Development<br/>(@coding-develop)"]
     InvokeDocPlan --> P4
@@ -61,8 +68,9 @@ flowchart TD
     P5Deploy --> DeployRun["Execute local deploy & monitor health"]
     DeployRun --> DeploySuccess{"Deployment<br/>Successful?"}
     DeploySuccess -->|"Yes"| JoinDevDeploy
-    DeploySuccess -->|"Error"| DeployIssueArtifact["Investigate error & author<br/>Deployment Issue artifact<br/>(RequestFeedback=True)"]
-    DeployIssueArtifact --> DeployGate{"User Decision on<br/>Deployment Issue?"}
+    DeploySuccess -->|"Error"| DeployIssueSubagent["Investigate error, write deployment-issue.md<br/>Relay [ARTIFACT_APPROVAL_REQUEST]"]
+    DeployIssueSubagent --> DeployIssueRoot["@coding calls write_file<br/>(RequestFeedback=True, sole tool call)"]
+    DeployIssueRoot --> DeployGate{"User Decision on<br/>Deployment Issue?"}
     DeployGate -->|"Approved"| MultiSolCheck{"Multiple solutions<br/>proposed?"}
     MultiSolCheck -->|"Yes"| AskSol["Relay solution choice<br/>([QUESTION_RELAY_REQUEST] -> ask_question<br/>-> [QUESTION_RELAY_RESPONSE])"]
     MultiSolCheck -->|"Single"| InvokeFixDev["Invoke @coding-develop<br/>to implement fix"]
@@ -126,11 +134,11 @@ flowchart TD
       Prompt=f"Synthesize the requirements into specification.md: {clarification_summary}"
   )
   ```
-- **Approval Gate**: `coding-specify` writes `specification.md` (with `RequestFeedback=True`) as its sole and final tool call, then enters the `idle` state awaiting human review.
-- **IDLE GUARD**: When Antigravity notifies `Subagent <id> has gone idle`, **DO NOT proceed to Stage 3!** Terminate your turn immediately without calling any tools, and remain idle.
+- **Artifact Approval Relay**: `coding-specify` writes `specification.md` to disk without `RequestFeedback=True` and dispatches `[ARTIFACT_APPROVAL_REQUEST]`.
+- **Orchestrator Presentation Loop**: `@coding` reads the artifact from disk and calls `write_file(Path=artifact_path, Content=..., Overwrite=True, ArtifactMetadata={"RequestFeedback": True, "UserFacing": True, "Summary": summary})` as the sole and final tool call of the turn.
 - **Stage Advancement**:
-  - You may ONLY proceed upon receiving an explicit message starting with `[GATE_APPROVED] specification.md:` from `coding-specify`. Advance directly to `coding-plan`.
-  - If receiving `[GATE_REJECTED] specification.md:`, route user feedback back to `coding-clarify`.
+  - When the user approves, send `[ARTIFACT_APPROVAL_RESPONSE]` with `"status": "APPROVED"` to `coding-specify` and advance to Stage 3 (`coding-plan`).
+  - When the user rejects, send `[ARTIFACT_APPROVAL_RESPONSE]` with `"status": "REJECTED"` and route user feedback back to `coding-clarify`.
 
 ### Stage 3: Planning (`coding-plan`)
 - **Action**: Spawn `coding-plan` with the approved specification:
@@ -142,10 +150,10 @@ flowchart TD
   )
   ```
 - **Local Deployment Assessment**: `coding-plan` inspects each target repository for local deployment instructions (Docker, docker-compose, scripts/deployment_local.sh, terraform/local, Minikube/Kubernetes manifests) and adds explicit deployment steps to `plan.md`.
-- **Approval Gate**: `coding-plan` writes `plan.md` (with `RequestFeedback=True`) as its sole and final tool call, then enters the `idle` state awaiting human review.
-- **IDLE GUARD**: When Antigravity notifies `Subagent <id> has gone idle`, **DO NOT proceed to Stage 4!** Terminate your turn immediately without calling any tools, and remain idle.
+- **Artifact Approval Relay**: `coding-plan` writes `plan.md` to disk without `RequestFeedback=True` and dispatches `[ARTIFACT_APPROVAL_REQUEST]`.
+- **Orchestrator Presentation Loop**: `@coding` reads the artifact from disk and calls `write_file(Path=artifact_path, Content=..., Overwrite=True, ArtifactMetadata={"RequestFeedback": True, "UserFacing": True, "Summary": summary})` as the sole and final tool call of the turn.
 - **Stage Advancement & Documentation**:
-  - You may ONLY proceed upon receiving an explicit message starting with `[GATE_APPROVED] plan.md:` from `coding-plan`.
+  - When the user approves, send `[ARTIFACT_APPROVAL_RESPONSE]` with `"status": "APPROVED"` to `coding-plan`.
   - **Decision Gate (Call 1/3 — After Plan Approval)**: If `agentic-project-documenting-plugin` is installed, invoke `@coding-document` to record implementation architecture, task breakdown, and formalize ADRs:
     ```python
     invoke_subagent(
@@ -154,7 +162,7 @@ flowchart TD
         Prompt=f"Document architecture plan, work breakdown, and formalize ADRs for approved plan: {plan_content}"
     )
     ```
-  - If receiving `[GATE_REJECTED] plan.md:`, route user feedback back to `coding-clarify`.
+  - When the user rejects, send `[ARTIFACT_APPROVAL_RESPONSE]` with `"status": "REJECTED"` and route user feedback back to `coding-clarify`.
 
 ### Stage 4: Isolated Development (`coding-develop`)
 - **Action**: For each target repository in the plan, spawn a separate `coding-develop` worker in parallel:
@@ -179,8 +187,8 @@ flowchart TD
   ```
 - **Execution & Monitoring**: `coding-deploy` runs the local deployment commands and monitors the deployment (pod phases, container status, health check endpoints) to ensure everything deploys properly.
 - **Error Investigation & User Approval**:
-  - If an error is encountered during deployment, `coding-deploy` investigates it and authors an artifact titled `Deployment Issue` (`deployment-issue.md`, `RequestFeedback=True`).
-  - Antigravity presents interactive Approve / Reject buttons.
+  - If an error is encountered during deployment, `coding-deploy` investigates it, writes `deployment-issue.md` to disk without `RequestFeedback=True`, and dispatches `[ARTIFACT_APPROVAL_REQUEST]`.
+  - `@coding` presents `deployment-issue.md` via `write_file(..., ArtifactMetadata={"RequestFeedback": True, "UserFacing": True})` as its sole tool call and returns `[ARTIFACT_APPROVAL_RESPONSE]` to `coding-deploy`.
   - If approved:
     * If multiple solutions were proposed, `coding-deploy` sends a `[QUESTION_RELAY_REQUEST]` message to `@coding`.
     * `@coding` prompts the user using `ask_question` and replies with `[QUESTION_RELAY_RESPONSE]\nAnswer: <selected_option>` to `coding-deploy`.
@@ -230,24 +238,56 @@ flowchart TD
     )
     ```
 
-## Interactive Approval Gate Protocol
+## Artifact Approval Relay Protocol & Orchestrator Presentation Loop
 
+To prevent background worker subagents from terminating due to Antigravity's 60-second subagent execution timeout when users review artifacts, worker subagents author artifacts to disk without `RequestFeedback=True` and relay approval gates to `@coding`:
+
+### 1. Protocol Contracts
+- **Approval Request (`Subagent -> @coding`)**:
+  ```text
+  [ARTIFACT_APPROVAL_REQUEST]
+  ```
+  ```json
+  {
+    "type": "ARTIFACT_APPROVAL_REQUEST",
+    "artifact_name": "specification.md",
+    "artifact_path": "/path/to/brain/<session-id>/specification.md",
+    "stage": "SPECIFICATION",
+    "summary": "Detailed technical specification for user approval",
+    "user_facing": true
+  }
+  ```
+- **Approval Response (`@coding -> Subagent`)**:
+  ```text
+  [ARTIFACT_APPROVAL_RESPONSE]
+  ```
+  ```json
+  {
+    "type": "ARTIFACT_APPROVAL_RESPONSE",
+    "artifact_name": "specification.md",
+    "status": "APPROVED",
+    "feedback": ""
+  }
+  ```
+
+### 2. Orchestrator Artifact Gate Presentation Loop
+When `@coding` receives an `[ARTIFACT_APPROVAL_REQUEST]`:
+1. **Read Artifact**: Read the artifact content from `artifact_path` using `read_file`.
+2. **Present Interactive Gate**: Call `write_file(Path=artifact_path, Content=content, Overwrite=True, ArtifactMetadata={"RequestFeedback": True, "UserFacing": True, "Summary": summary})` as the **sole and final tool call of that turn**.
+3. **Wait for User Review**: Terminate turn immediately without executing secondary tools. The Antigravity UI renders the interactive Approve / Reject buttons at the session root without any 60-second timeout.
+4. **Relay Decision**:
+   - On Approval: Dispatch `[ARTIFACT_APPROVAL_RESPONSE]` with `"status": "APPROVED"` to the requesting subagent using `send_message`.
+   - On Rejection / Feedback: Dispatch `[ARTIFACT_APPROVAL_RESPONSE]` with `"status": "REJECTED"` and `"feedback": "<user_comments>"` to the requesting subagent using `send_message`.
+5. **Phase Progression**:
+   - For `specification.md`: on approval, advance to `coding-plan`; on rejection, route back to `coding-clarify`.
+   - For `plan.md`: on approval, advance to `coding-develop` (and invoke `@coding-document` if installed); on rejection, route back to `coding-clarify`.
+   - For `deployment-issue.md`: on approval, handle solution choice and invoke `coding-develop`.
+
+### 3. Idle Guard
 > [!IMPORTANT]
-> **Subagent Idle vs Approval Disambiguation**:
-> When `coding-specify`, `coding-plan`, or `coding-deploy` writes an artifact (`specification.md`, `plan.md`, or `deployment-issue.md`) with `RequestFeedback=True`, the subagent ends its turn and enters the `idle` state while awaiting the human user's interactive button click.
-> The Antigravity platform will automatically notify you: `Subagent <id> has gone idle`.
->
-> **DO NOT proceed to the next stage when receiving `Subagent <id> has gone idle`!**
-> A subagent entering `idle` is NOT an indication of stage approval or completion. It means the subagent is waiting for the user to review the artifact.
->
-> When you receive a `has gone idle` notification from a gatekeeper subagent:
-> 1. Do NOT invoke any subagent.
-> 2. Do NOT run commands or modify files.
-> 3. Terminate your turn immediately without calling tools, and remain idle.
->
-> **Stage Progression & Gate Messages**:
-> - You may ONLY proceed to Stage 3 or Stage 4 when the subagent sends an explicit message starting with `[GATE_APPROVED]` (e.g. `[GATE_APPROVED] specification.md: ...` or `[GATE_APPROVED] plan.md: ...`).
-> - If receiving `[GATE_REJECTED]`, route user comments and feedback back to `coding-clarify` to resume the clarification loop.
+> When a subagent enters the `idle` state while awaiting approval, Antigravity notifies you: `Subagent <id> has gone idle`.
+> **DO NOT proceed to the next stage upon receiving `Subagent <id> has gone idle`!**
+> Terminate your turn immediately without calling tools, and remain idle until user interaction occurs.
 
 ## Question Relay Protocol (`[QUESTION_RELAY_REQUEST]` / `[QUESTION_RELAY_RESPONSE]`)
 

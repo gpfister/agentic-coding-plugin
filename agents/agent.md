@@ -48,14 +48,14 @@ Subagents are discovered dynamically and registered via `define_subagent` (or `d
 
 | Agent Handle | Directory | `enable_write_tools` | `enable_subagent_tools` | `enable_mcp_tools` | Allowed Tools | Primary Responsibility |
 | :--- | :--- | :---: | :---: | :---: | :--- | :--- |
-| **`@coding`** | [`agents/coding/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding/) | `True` | `True` | `True` | `invoke_subagent`, `send_message`, `manage_subagents`, `ask_question`, `read_file`, `list_dir`, `run_command` | 7-stage lifecycle pipeline orchestration |
+| **`@coding`** | [`agents/coding/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding/) | `True` | `True` | `True` | `invoke_subagent`, `send_message`, `manage_subagents`, `ask_question`, `read_file`, `write_file`, `list_dir`, `run_command` | 7-stage lifecycle pipeline orchestration |
 | **`@coding-clarify`** | [`agents/coding-clarify/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-clarify/) | `False` | `False` | `True` | `ask_question`, `read_file`, `list_dir`, `search_web`, `send_message` | One-question-at-a-time requirement interrogation with Question Relay Protocol |
 | **`@coding-specify`** | [`agents/coding-specify/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-specify/) | `True` | `False` | `True` | `write_file`, `read_file`, `list_dir`, `search_web`, `send_message` | Specification authoring & interactive approval gate |
 | **`@coding-plan`** | [`agents/coding-plan/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-plan/) | `True` | `False` | `True` | `write_file`, `read_file`, `list_dir`, `run_command`, `send_message` | Multi-repo task breakdown, deployment assessment, & branch planning |
 | **`@coding-develop`** | [`agents/coding-develop/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-develop/) | `True` | `False` | `True` | `read_file`, `write_file`, `edit_file`, `list_dir`, `run_command`, `search_web` | Isolated repo implementation, tests, linting, docs, and fix remediation |
 | **`@coding-deploy`** | [`agents/coding-deploy/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-deploy/) | `True` | `True` | `True` | `run_command`, `read_file`, `list_dir`, `write_file`, `edit_file`, `ask_question`, `send_message`, `invoke_subagent` | Local deployment execution, health monitoring, error investigation & fix orchestration |
 | **`@coding-review`** | [`agents/coding-review/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-review/) | `True` | `False` | `True` | `read_file`, `list_dir`, `run_command`, `ask_question`, `send_message` | Deliverables and deployment verification against specification; merge confirmation relay |
-| **`@coding-merge`** | [`agents/coding-merge/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-merge/) | `True` | `False` | `True` | `run_command`, `read_file`, `list_dir`, `ask_question` | Local branch merge or GitHub Pull Request (`gh pr create`) |
+| **`@coding-merge`** | [`agents/coding-merge/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-merge/) | `True` | `False` | `True` | `run_command`, `read_file`, `list_dir`, `ask_question`, `send_message` | Local branch merge or remote Pull Request creation with Question Relay waiting gate and post-merge branch sync |
 
 ---
 
@@ -87,10 +87,11 @@ coding-clarify ──> coding-specify ──> coding-plan ──> coding-develop
 ### Stage 2: Specification (`coding-specify`)
 - **Objective**: Author a comprehensive, verifiable technical specification document (`specification.md`).
 - **Contents**: Problem motivation, functional requirements, non-functional requirements, affected repositories, test contracts, and edge-case mitigations.
-- **Interactive Approval Gate & Idle Guard**:
-  - `coding-specify` writes `specification.md` with `RequestFeedback=True` as its sole and final tool call, then enters the `idle` state.
-  - When Antigravity notifies `Subagent <id> has gone idle`, `@coding` must **halt and remain idle** without invoking subagents.
-  - `@coding` advances to Stage 3 (`coding-plan`) **only** upon receiving an explicit `[GATE_APPROVED] specification.md:` message from `coding-specify`.
+- **Artifact Approval Relay Gate**:
+  - `coding-specify` writes `specification.md` to disk without `RequestFeedback=True`.
+  - Dispatches `[ARTIFACT_APPROVAL_REQUEST]` to `@coding` and awaits `[ARTIFACT_APPROVAL_RESPONSE]`.
+  - `@coding` presents the interactive modal to the user using `write_file(..., ArtifactMetadata={"RequestFeedback": True, "UserFacing": True})` as its sole tool call of that turn, avoiding subagent timeouts.
+  - `@coding` advances to Stage 3 (`coding-plan`) upon receiving approval (or routes to `coding-clarify` on rejection).
 
 ### Stage 3: Planning (`coding-plan`)
 - **Objective**: Deconstruct the approved specification into atomic, verifiable steps, assess local deployment requirements, and determine git branch names (`plan.md`).
@@ -100,10 +101,11 @@ coding-clarify ──> coding-specify ──> coding-plan ──> coding-develop
 - **Multi-Repository Isolation**:
   - Assigns work strictly per repository (respecting workspace boundaries).
   - Branch conventions: `feature/<name>` (new capabilities), `task/<name>` (maintenance/refactoring), `bugfix/<name>` (bug fixes).
-- **Interactive Approval Gate & Idle Guard**:
-  - `coding-plan` writes `plan.md` with `RequestFeedback=True` as its sole and final tool call, then enters the `idle` state.
-  - When Antigravity notifies `Subagent <id> has gone idle`, `@coding` must **halt and remain idle** without invoking subagents.
-  - `@coding` advances to Stage 4 (`coding-develop`) **only** upon receiving an explicit `[GATE_APPROVED] plan.md:` message from `coding-plan`.
+- **Artifact Approval Relay Gate**:
+  - `coding-plan` writes `plan.md` to disk without `RequestFeedback=True`.
+  - Dispatches `[ARTIFACT_APPROVAL_REQUEST]` to `@coding` and awaits `[ARTIFACT_APPROVAL_RESPONSE]`.
+  - `@coding` presents the interactive modal to the user using `write_file(..., ArtifactMetadata={"RequestFeedback": True, "UserFacing": True})` as its sole tool call of that turn.
+  - `@coding` advances to Stage 4 (`coding-develop`) upon receiving approval (or routes to `coding-clarify` on rejection).
 
 ### Stage 4: Development (`coding-develop`)
 - **Objective**: Implement required code changes, tests, linters, documentation, and CI/CD updates.
@@ -122,8 +124,8 @@ coding-clarify ──> coding-specify ──> coding-plan ──> coding-develop
 - **Error Investigation & Self-Healing Protocol**:
   - If a deployment failure or unhealthy probe occurs:
     1. Investigate the failure and extract diagnostic evidence (logs, pod descriptions, events).
-    2. Author a `Deployment Issue` artifact (`deployment-issue.md`) with `RequestFeedback=True` as the sole and final tool call of the turn.
-    3. Await user decision at the approval gate.
+    2. Author a `Deployment Issue` artifact (`deployment-issue.md`) without `RequestFeedback=True` and dispatch `[ARTIFACT_APPROVAL_REQUEST]` to `@coding`.
+    3. `@coding` presents the artifact to the user via `write_file(..., ArtifactMetadata={"RequestFeedback": True, "UserFacing": True})` and relays `[ARTIFACT_APPROVAL_RESPONSE]`.
     4. If approved: if multiple solutions were proposed, prompt the user to choose the desired fix (relaying via `[QUESTION_RELAY_REQUEST]` under `@coding`, or calling `ask_question` directly in standalone mode).
     5. Invoke `coding-develop` to implement the approved fix.
     6. Re-deploy and verify health until clean or user aborts.
@@ -139,8 +141,14 @@ coding-clarify ──> coding-specify ──> coding-plan ──> coding-develop
 - **Objective**: Safely integrate approved changes into repository release branches.
 - **Prerequisite**: `@coding-merge` strictly waits for all `coding-deploy` and all `coding-develop` tasks to have completed successfully before proceeding.
 - **Merge Strategy**:
-  - **No Remote Repository**: Checkout base branch (`master`/`main`) and execute local `git merge <branch>`.
-  - **Remote Repository Configured**: Push branch to origin (`git push origin <branch>`) and create a Pull Request via GitHub CLI (`gh pr create`).
+  - **No Remote Repository (Local Strategy)**: Checkout base branch (`master`/`main`) and execute local `git merge <branch>`.
+  - **Remote Repository Configured (Remote Strategy)**:
+    - Push feature branch to origin: `git push -u origin <branch>`.
+    - Check GitHub CLI authentication status: `gh auth status`.
+    - If authenticated, create Pull Request: `gh pr create --base <base> --head <branch> --title "<title>" --body "<body>"`.
+    - If unauthenticated or missing `gh`, generate web compare URL (`https://github.com/<owner>/<repo>/compare/<base>...<branch>?expand=1`) and prompt user via Question Relay Protocol.
+    - **Hybrid PR Waiting Gate**: Inspect PR state via `gh pr view <pr_number> --json state,reviewDecision,mergedAt,url`. If `state == "OPEN"`, delegate gate choices to `@coding` using `[QUESTION_RELAY_REQUEST]` (Re-check, Enable GitHub auto-merge, or Proceed without waiting) to prevent Antigravity 60-second subagent timeouts.
+    - **Post-Merge Base Synchronization & Local Cleanup**: When PR is merged (`state == "MERGED"`), switch to base branch (`git checkout <base>`), pull remote changes fast-forward (`git pull --ff-only origin <base>`), and delete local feature branch (`git branch -d <branch>`).
 
 ---
 
@@ -166,39 +174,58 @@ For fast non-autoregressive prompt classification and intent routing across inst
 
 ---
 
-## 4. Antigravity Interactive Artifact Approval Protocol
+## 4. Artifact Approval Relay Protocol (`[ARTIFACT_APPROVAL_REQUEST]` / `[ARTIFACT_APPROVAL_RESPONSE]`)
 
-Artifacts requiring human confirmation (`specification.md`, `plan.md`, `deployment-issue.md`) must trigger the interactive **Approve / Reject** modal in the Antigravity UI:
+In Google Antigravity, background worker subagents run inside managed subagent processes with a strict 60-second turn execution timeout. If a subagent invokes `write_file` with `ArtifactMetadata={"RequestFeedback": True}`, the subagent process remains active waiting for the user to review and interact with the Approve / Reject buttons. If the user deliberates for longer than 60 seconds, Antigravity throws a subagent execution timeout error, crashing the workflow.
 
-1. **Artifact Location**: Write directly to the conversation artifact directory:
-   `<appDataDir>/brain/<conversation-id>/<artifact_name>.md`.
-2. **Artifact Metadata**: Always supply `ArtifactMetadata` with `RequestFeedback=True` and `UserFacing=True`:
-   ```python
-   write_file(
-       Path=f"{artifact_dir}/specification.md",
-       Content=spec_content,
-       Overwrite=True,
-       ArtifactMetadata={
-           "RequestFeedback": True,
-           "UserFacing": True,
-           "Summary": "Technical specification for user review and approval."
-       }
-   )
-   ```
-3. **Sole & Final Tool Call Rule (CRITICAL)**:
-   - To trigger the interactive modal, `write_file(..., RequestFeedback=True)` MUST be the **sole and final tool call of that turn**.
-   - Never batch secondary tool calls (e.g. running shell commands, writing Obsidian notes, sending messages) in the same turn.
-   - Stop calling tools immediately after writing the artifact to yield the turn to the user and enter the `idle` state.
-4. **Subagent Idle vs Approval Disambiguation Guard**:
-   - When a gatekeeper subagent (`coding-specify`, `coding-plan`, or `coding-deploy`) writes an artifact and enters `idle`, Antigravity notifies the orchestrator: `Subagent <id> has gone idle`.
-   - **DO NOT proceed to the next stage upon receiving `Subagent <id> has gone idle`!** The orchestrator must terminate its turn without calling any tools and remain idle.
-5. **Handling User Decisions & Gate Messages**:
-   - On interactive approval (`[Approved] <artifact>.md`), the subagent sends:
-     `send_message(Recipient="<orchestrator_id>", Message="[GATE_APPROVED] <artifact>.md: ...")`
-     The orchestrator then advances to the subsequent stage (`coding-plan` after `specification.md`, `coding-develop` after `plan.md`).
-   - On interactive rejection or comments (`[Rejected] <artifact>.md`), the subagent sends:
-     `send_message(Recipient="<orchestrator_id>", Message="[GATE_REJECTED] <artifact>.md: <User Feedback>")`
-     The orchestrator routes feedback back to `coding-clarify` to resume the clarification loop.
+To eliminate this timeout while preserving full human-in-the-loop interactive control, artifact approval gates are relayed through the top-level orchestrator (`@coding`):
+
+### 4.1 Protocol Message Envelopes
+
+#### Request: `[ARTIFACT_APPROVAL_REQUEST]`
+Dispatched by the worker subagent (`coding-specify`, `coding-plan`, `coding-deploy`) to `@coding` (`caller_id`):
+```text
+[ARTIFACT_APPROVAL_REQUEST]
+```
+```json
+{
+  "type": "ARTIFACT_APPROVAL_REQUEST",
+  "artifact_name": "specification.md",
+  "artifact_path": "/Users/user/.gemini/antigravity/brain/<session-id>/specification.md",
+  "stage": "SPECIFICATION",
+  "summary": "Detailed technical specification for feature XYZ",
+  "user_facing": true
+}
+```
+
+#### Response: `[ARTIFACT_APPROVAL_RESPONSE]`
+Dispatched by `@coding` back to the worker subagent:
+```text
+[ARTIFACT_APPROVAL_RESPONSE]
+```
+```json
+{
+  "type": "ARTIFACT_APPROVAL_RESPONSE",
+  "artifact_name": "specification.md",
+  "status": "APPROVED",
+  "feedback": ""
+}
+```
+*(On rejection, `"status": "REJECTED"` and `"feedback"` contains user comments.)*
+
+### 4.2 Lifecycle Flow & Roles
+1. **Worker Subagent**:
+   - Writes the artifact to disk (`<appDataDir>/brain/<conversation-id>/<artifact_name>.md`) using `write_file(..., Overwrite=True)` without `ArtifactMetadata` or with `RequestFeedback=False`.
+   - Sends `[ARTIFACT_APPROVAL_REQUEST]` via `send_message(Recipient="<caller_id>", Message=...)`.
+   - Enters `idle` state and awaits reactive wakeup upon receiving `[ARTIFACT_APPROVAL_RESPONSE]`.
+2. **Top-Level Orchestrator (`@coding`)**:
+   - Intercepts `[ARTIFACT_APPROVAL_REQUEST]`.
+   - Reads the artifact content from disk at `artifact_path`.
+   - Invokes `write_file(Path=artifact_path, Content=content, Overwrite=True, ArtifactMetadata={"RequestFeedback": True, "UserFacing": True, "Summary": summary})` as the **sole and final tool call of that turn**.
+   - Awaits user review at the root turn (no 60-second subagent timeout).
+   - Relays the user decision back to the subagent using `[ARTIFACT_APPROVAL_RESPONSE]`.
+3. **Standalone Fallback**:
+   - If a subagent is invoked standalone without a caller ID, it writes the artifact directly with `ArtifactMetadata={"RequestFeedback": True, "UserFacing": True}` as its sole and final tool call.
 
 ---
 

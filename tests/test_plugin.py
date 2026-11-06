@@ -199,6 +199,13 @@ def test_subagents_frontmatter_and_permissions():
     assert "send_message" in review_tools, "coding-review must have 'send_message' tool"
     assert "ask_question" in review_tools, "coding-review must have 'ask_question' tool"
 
+    merge_md = PLUGIN_ROOT / "agents" / "coding-merge" / "agent.md"
+    meta_merge = parse_frontmatter(merge_md)
+    assert meta_merge.get("name") == "coding-merge"
+    merge_tools = meta_merge.get("tools", [])
+    assert "send_message" in merge_tools, "coding-merge must have 'send_message' tool"
+    assert "ask_question" in merge_tools, "coding-merge must have 'ask_question' tool"
+
 
 def test_coding_deploy_specifications():
     """Verify specific instructions in coding-deploy/agent.md."""
@@ -236,6 +243,7 @@ def test_question_relay_protocol_contracts():
         PLUGIN_ROOT / "agents" / "coding" / "agent.md",
         PLUGIN_ROOT / "agents" / "coding-deploy" / "agent.md",
         PLUGIN_ROOT / "agents" / "coding-review" / "agent.md",
+        PLUGIN_ROOT / "agents" / "coding-merge" / "agent.md",
         PLUGIN_ROOT / "skills" / "coding-orchestrator" / "SKILL.md",
         PLUGIN_ROOT / "rules" / "AGENTS.md",
         PLUGIN_ROOT / "agents" / "agent.md",
@@ -255,3 +263,48 @@ def test_question_relay_protocol_contracts():
 
     agent_catalog = (PLUGIN_ROOT / "agents" / "agent.md").read_text(encoding="utf-8")
     assert "timeout" in agent_catalog.lower()
+
+
+def test_artifact_approval_relay_protocol_contracts():
+    """Verify that Artifact Approval Relay Protocol contracts exist across all specified files."""
+    files_to_check = [
+        PLUGIN_ROOT / "agents" / "coding-specify" / "agent.md",
+        PLUGIN_ROOT / "agents" / "coding-plan" / "agent.md",
+        PLUGIN_ROOT / "agents" / "coding-deploy" / "agent.md",
+        PLUGIN_ROOT / "agents" / "coding" / "agent.md",
+        PLUGIN_ROOT / "skills" / "coding-orchestrator" / "SKILL.md",
+        PLUGIN_ROOT / "rules" / "AGENTS.md",
+        PLUGIN_ROOT / "agents" / "agent.md",
+    ]
+    for file_path in files_to_check:
+        assert file_path.exists(), f"{file_path} must exist"
+        content = file_path.read_text(encoding="utf-8")
+        assert "[ARTIFACT_APPROVAL_REQUEST]" in content, f"[ARTIFACT_APPROVAL_REQUEST] missing in {file_path.name}"
+        assert "[ARTIFACT_APPROVAL_RESPONSE]" in content, f"[ARTIFACT_APPROVAL_RESPONSE] missing in {file_path.name}"
+
+    # Verify orchestrator includes write_file in its tools
+    coding_md = PLUGIN_ROOT / "agents" / "coding" / "agent.md"
+    meta_coding = parse_frontmatter(coding_md)
+    tools_coding = meta_coding.get("tools", [])
+    assert "write_file" in tools_coding, "coding orchestrator must have 'write_file' tool"
+
+    # Verify Section 7 exists in rules/AGENTS.md
+    rules_content = (PLUGIN_ROOT / "rules" / "AGENTS.md").read_text(encoding="utf-8")
+    assert "Artifact Approval Relay Protocol" in rules_content
+    assert "Section 7" in rules_content or "## 7." in rules_content
+
+
+def test_coding_merge_pr_waiting_and_sync():
+    """Verify that coding-merge includes PR creation, waiting gate, compare fallback, and post-merge cleanup."""
+    merge_md = PLUGIN_ROOT / "agents" / "coding-merge" / "agent.md"
+    assert merge_md.exists()
+    content = merge_md.read_text(encoding="utf-8")
+    assert "gh pr create" in content
+    assert "gh pr view" in content
+    assert "[QUESTION_RELAY_REQUEST]" in content
+    assert "[QUESTION_RELAY_RESPONSE]" in content
+    assert "git pull --ff-only" in content
+    assert "git branch -d" in content
+    assert "compare" in content
+    assert "github.com" in content
+    assert "MergeReport" in content
