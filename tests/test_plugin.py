@@ -303,11 +303,52 @@ def test_coding_merge_pr_waiting_and_sync():
     assert "gh pr view" in content
     assert "[QUESTION_RELAY_REQUEST]" in content
     assert "[QUESTION_RELAY_RESPONSE]" in content
+    assert "git checkout <base>" in content
     assert "git pull --ff-only" in content
+    assert "git push origin --delete" in content
     assert "git branch -d" in content
+    assert "git fetch --prune" in content
+    assert "git branch --show-current" in content
     assert "compare" in content
     assert "github.com" in content
     assert "MergeReport" in content
+    assert '"cleanup": true' in content
+
+
+def test_coding_merge_complete_branch_cleanup_and_prune():
+    """Verify that complete branch cleanup, prune, and base branch checkout are documented across all relevant files."""
+    merge_md = PLUGIN_ROOT / "agents" / "coding-merge" / "agent.md"
+    merge_content = merge_md.read_text(encoding="utf-8")
+    assert "git push origin --delete <branch>" in merge_content
+    assert "git fetch --prune origin" in merge_content
+    assert "git branch -d <branch>" in merge_content
+    assert "git branch -D <branch>" in merge_content
+    assert "git branch --show-current" in merge_content
+    assert '"cleanup": true' in merge_content
+    assert '"deleted_branches"' in merge_content
+    assert '"pruned": true' in merge_content
+
+    skill_md = PLUGIN_ROOT / "skills" / "coding-orchestrator" / "SKILL.md"
+    skill_content = skill_md.read_text(encoding="utf-8")
+    assert "git push origin --delete" in skill_content
+    assert "git fetch --prune origin" in skill_content
+    assert "git branch -d" in skill_content
+    assert "Post-Merge Base Synchronization & Complete Cleanup" in skill_content
+
+    coding_agent_md = PLUGIN_ROOT / "agents" / "coding" / "agent.md"
+    coding_agent_content = coding_agent_md.read_text(encoding="utf-8")
+    assert "git push origin --delete" in coding_agent_content
+    assert "git fetch --prune origin" in coding_agent_content
+    assert "git branch -d" in coding_agent_content
+    assert "complete cleanup/prune" in coding_agent_content.lower()
+
+    agent_catalog_md = PLUGIN_ROOT / "agents" / "agent.md"
+    agent_catalog_content = agent_catalog_md.read_text(encoding="utf-8")
+    assert "git push origin --delete" in agent_catalog_content
+    assert "git fetch --prune origin" in agent_catalog_content
+    assert "git branch -d" in agent_catalog_content
+    assert "Post-Merge Base Synchronization & Complete Cleanup" in agent_catalog_content
+    assert "pruned: true" in agent_catalog_content
 
 
 def test_coding_orchestrator_dual_mode_classification():

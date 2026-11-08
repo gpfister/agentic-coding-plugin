@@ -26,7 +26,13 @@ The `agentic-coding-plugin` coordinates a 7-stage development lifecycle:
 4. **Development (`@coding-develop`)**: Parallel implementation workers per repository.
 5. **Local Deployment (`@coding-deploy`)**: Executes and monitors local deployment (Docker, Minikube, Terraform, scripts) per repo, investigating errors and authoring `Deployment Issue` artifacts with remediation options on failure.
 6. **Review (`@coding-review`)**: Audits changes and deployment health against specification and verifies tests.
-7. **Release & Merge (`@coding-merge`)**: Merges locally or creates GitHub pull requests after all development and deployment tasks complete.
+7. **Release & Merge (`@coding-merge`)**: Merges locally with base branch switch verification and safe local branch deletion, or creates GitHub pull requests with interactive Question Relay waiting gates, post-merge base synchronization (`git pull --ff-only`), remote branch deletion (`git push origin --delete`), local branch deletion (`git branch -d`), and remote tracking reference pruning (`git fetch --prune origin`).
+
+### Release & Merge Hygiene (`@coding-merge`)
+
+To eliminate repository branch clutter, stale tracking references, and detached working trees:
+- **Local Release Strategy**: When no remote is configured, checks out the base branch (`main`/`master`), merges the feature branch (`git merge <branch>`), verifies checkout on the base branch (`git branch --show-current`), and safely deletes the local feature branch (`git branch -d <branch>`), emitting `MergeReport` with `cleanup: true`.
+- **Remote Release Strategy**: Pushes the feature branch (`git push -u origin <branch>`), creates a Pull Request via GitHub CLI (`gh pr create` with browser compare URL fallback), and delegates PR review waiting gates to the parent caller via Question Relay Protocol (`[QUESTION_RELAY_REQUEST]`). Once merged, switches to the base branch (`git checkout <base>`), fast-forwards remote commits (`git pull --ff-only origin <base>`), deletes the remote feature branch (`git push origin --delete <branch>`), safely deletes the local feature branch (`git branch -d <branch>`), prunes obsolete remote-tracking references (`git fetch --prune origin`), and verifies the working tree confirms the base branch.
 
 ### Dual-Mode Orchestration & Multi-Hop Relay Protocol
 

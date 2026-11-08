@@ -55,7 +55,7 @@ Subagents are discovered dynamically and registered via `define_subagent` (or `d
 | **`@coding-develop`** | [`agents/coding-develop/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-develop/) | `True` | `False` | `True` | `read_file`, `write_file`, `edit_file`, `list_dir`, `run_command`, `search_web` | Isolated repo implementation, tests, linting, docs, and fix remediation |
 | **`@coding-deploy`** | [`agents/coding-deploy/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-deploy/) | `True` | `True` | `True` | `run_command`, `read_file`, `list_dir`, `write_file`, `edit_file`, `ask_question`, `send_message`, `invoke_subagent` | Local deployment execution, health monitoring, error investigation & fix orchestration |
 | **`@coding-review`** | [`agents/coding-review/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-review/) | `True` | `False` | `True` | `read_file`, `list_dir`, `run_command`, `ask_question`, `send_message` | Deliverables and deployment verification against specification; merge confirmation relay |
-| **`@coding-merge`** | [`agents/coding-merge/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-merge/) | `True` | `False` | `True` | `run_command`, `read_file`, `list_dir`, `ask_question`, `send_message` | Local branch merge or remote Pull Request creation with Question Relay waiting gate and post-merge branch sync |
+| **`@coding-merge`** | [`agents/coding-merge/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-merge/) | `True` | `False` | `True` | `run_command`, `read_file`, `list_dir`, `ask_question`, `send_message` | Local branch merge with base checkout and branch cleanup, or remote Pull Request creation with Question Relay waiting gate, base branch synchronization, remote branch deletion, and remote tracking reference pruning |
 
 ### 1.3 Dual-Mode Orchestration & Anti-Direct-Coding Boundaries
 - **Pure Subagents vs Dual-Mode Orchestrator**:
@@ -151,17 +151,17 @@ coding-clarify ──> coding-specify ──> coding-plan ──> coding-develop
   - If approved: Present validation summary to the user and request confirmation to proceed to merge (relaying upward via `[QUESTION_RELAY_REQUEST]` in Subagent Mode, or handled directly by `@coding` via `ask_question` in Phase 6 in Standalone Mode).
 
 ### Stage 7: Release & Merge (`coding-merge`)
-- **Objective**: Safely integrate approved changes into repository release branches.
+- **Objective**: Safely integrate approved changes into repository release branches with complete cleanup.
 - **Prerequisite**: `@coding-merge` strictly waits for all `coding-deploy` and all `coding-develop` tasks to have completed successfully before proceeding.
 - **Merge Strategy**:
-  - **No Remote Repository (Local Strategy)**: Checkout base branch (`master`/`main`) and execute local `git merge <branch>`.
+  - **No Remote Repository (Local Strategy)**: Checkout base branch (`master`/`main`), execute local `git merge <branch>`, verify checkout on base branch, safely delete local feature branch (`git branch -d <branch>`), and emit structured report (`cleanup: true`).
   - **Remote Repository Configured (Remote Strategy)**:
     - Push feature branch to origin: `git push -u origin <branch>`.
     - Check GitHub CLI authentication status: `gh auth status`.
     - If authenticated, create Pull Request: `gh pr create --base <base> --head <branch> --title "<title>" --body "<body>"`.
     - If unauthenticated or missing `gh`, generate web compare URL (`https://github.com/<owner>/<repo>/compare/<base>...<branch>?expand=1`) and prompt user via Question Relay Protocol.
     - **Hybrid PR Waiting Gate**: Inspect PR state via `gh pr view <pr_number> --json state,reviewDecision,mergedAt,url`. If `state == "OPEN"`, delegate gate choices to `@coding` using `[QUESTION_RELAY_REQUEST]` (Re-check, Enable GitHub auto-merge, or Proceed without waiting) to prevent Antigravity 60-second subagent timeouts.
-    - **Post-Merge Base Synchronization & Local Cleanup**: When PR is merged (`state == "MERGED"`), switch to base branch (`git checkout <base>`), pull remote changes fast-forward (`git pull --ff-only origin <base>`), and delete local feature branch (`git branch -d <branch>`).
+    - **Post-Merge Base Synchronization & Complete Cleanup**: When PR is merged (`state == "MERGED"`), switch to base branch (`git checkout <base>`), pull remote changes fast-forward (`git pull --ff-only origin <base>`), delete remote feature branch (`git push origin --delete <branch>`), safely delete local feature branch (`git branch -d <branch>`), prune remote tracking references (`git fetch --prune origin`), verify checkout on `<base>`, and emit structured report (`cleanup: true`, `deleted_branches: {local, remote}`, `pruned: true`).
 
 ---
 
