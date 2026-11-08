@@ -160,7 +160,7 @@ flowchart TD
     InvokeDocPreMerge --> P7Merge
 
     %% Phase 7: Release & Merge
-    P7Merge --> ExecMerge["Wait for all develop & deploy<br/>Execute git merge or open GitHub PR"]
+    P7Merge --> ExecMerge["Wait for all develop & deploy<br/>Execute merge/PR & complete cleanup/prune"]
     ExecMerge --> DocPostMergeCheck{"agentic-project-documenting-plugin<br/>installed?"}
     DocPostMergeCheck -->|"Yes"| InvokeDocPostMerge["Invoke @coding-document<br/>(Post-merge: update git status, branch tracking & changelogs)"]
     DocPostMergeCheck -->|"No"| Complete(["Workflow Completed"])
@@ -280,6 +280,9 @@ flowchart TD
       Prompt=f"Execute merge or open Pull Request for branches: {branch_list}"
   )
   ```
+- **Execution & Complete Cleanup**:
+  - **Local Release**: Checks out base branch (`<base>`), merges locally, verifies working tree returns to `<base>`, and safely deletes local feature branch (`git branch -d <branch>`).
+  - **Remote Release**: Pushes feature branch, creates GitHub PR (or fallback compare URL), and handles waiting via Question Relay. Once merged, fast-forwards base branch (`git pull --ff-only origin <base>`), deletes remote feature branch (`git push origin --delete <branch>`), safely removes local feature branch (`git branch -d <branch>`), prunes remote tracking references (`git fetch --prune origin`), and verifies repository remains on `<base>`.
 - **Post-Merge Documentation Gate**:
   - When merge concludes, if `agentic-project-documenting-plugin` is installed, invoke `@coding-document` to update git status and changelogs.
 

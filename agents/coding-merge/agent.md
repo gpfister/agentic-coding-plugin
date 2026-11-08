@@ -1,6 +1,6 @@
 ---
 name: coding-merge
-description: Release engineer subagent performing branch merges, remote PR creation with Question Relay waiting gate, and post-merge branch synchronization.
+description: Release engineer subagent performing branch merges, remote PR creation with Question Relay waiting gate, post-merge base synchronization, and complete branch cleanup.
 enable_write_tools: true
 enable_subagent_tools: false
 enable_mcp_tools: true
@@ -68,14 +68,25 @@ When working in a local-only repository:
    ```bash
    git merge <branch>
    ```
-3. Conclude and output a structured `MergeReport`:
+3. Verify working tree checkout on `<base>`:
+   ```bash
+   git branch --show-current
+   ```
+4. Safely delete the local feature branch:
+   ```bash
+   git branch -d <branch>
+   ```
+5. Conclude and output a structured `MergeReport`:
    ```json
    {
      "status": "merged",
      "strategy": "local",
      "base_branch": "<base>",
      "merged_branch": "<branch>",
-     "cleanup": false
+     "cleanup": true,
+     "deleted_branches": {
+       "local": "<branch>"
+     }
    }
    ```
 
@@ -129,7 +140,7 @@ gh pr view <pr_number> --json state,reviewDecision,mergedAt,url
 ```
 
 - **If `state == "MERGED"`**:
-  Advance immediately to **Post-Merge Base Synchronization & Local Cleanup**.
+  Advance immediately to **Post-Merge Base Synchronization & Complete Cleanup**.
 
 - **If `state == "OPEN"`**:
   Do NOT sleep or poll in a synchronous loop. Relay a gate prompt to `@coding` using `[QUESTION_RELAY_REQUEST]`:
@@ -149,10 +160,10 @@ gh pr view <pr_number> --json state,reviewDecision,mergedAt,url
 
 ---
 
-### 5. Post-Merge Base Synchronization & Local Cleanup
+### 5. Post-Merge Base Synchronization & Complete Cleanup
 
 When the PR is confirmed merged (`state == "MERGED"`):
-1. Switch to the base branch:
+1. Switch to the base branch (`main` or `master`):
    ```bash
    git checkout <base>
    ```
@@ -160,12 +171,27 @@ When the PR is confirmed merged (`state == "MERGED"`):
    ```bash
    git pull --ff-only origin <base>
    ```
-3. Safely delete the local feature branch:
+3. Delete the remote feature branch on `origin`:
+   Check if the remote branch exists and delete it idempotently:
+   ```bash
+   git ls-remote --heads origin <branch>
+   git push origin --delete <branch>
+   ```
+   *(Note: If the remote branch has already been automatically deleted by GitHub upon merging, handle gracefully without error.)*
+4. Safely delete the local feature branch:
    ```bash
    git branch -d <branch>
    ```
-   *(Note: strictly use `-d`, never `-D`, to ensure safe deletion)*
-4. Conclude and return structured `MergeReport`:
+   *(Note: In squash-merge or rebase-merge PR scenarios where git cannot detect direct ancestry, fallback to `git branch -D <branch>` strictly after verifying that PR `state == "MERGED"` and the base branch has pulled the merged commit.)*
+5. Prune remote-tracking references to remove obsolete `origin/<branch>` references:
+   ```bash
+   git fetch --prune origin
+   ```
+6. Verify active working tree confirms checkout on `<base>`:
+   ```bash
+   git branch --show-current
+   ```
+7. Conclude and return structured `MergeReport`:
    ```json
    {
      "status": "merged",
@@ -174,6 +200,11 @@ When the PR is confirmed merged (`state == "MERGED"`):
      "pr_url": "<pr_url>",
      "base_branch": "<base>",
      "merged_branch": "<branch>",
-     "cleanup": true
+     "cleanup": true,
+     "deleted_branches": {
+       "local": "<branch>",
+       "remote": "<branch>"
+     },
+     "pruned": true
    }
    ```
