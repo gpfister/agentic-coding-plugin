@@ -268,6 +268,9 @@ flowchart TD
   ```
 - **Review Artifact & Plan-vs-Changes Audit**:
   - `coding-review` inspects actual `git status` / `git diff` across all participating repositories against `plan.md` and writes `<appDataDir>/brain/<conversation-id>/review-<slug>.md` (non-blocking, without `RequestFeedback=True` or `[ARTIFACT_APPROVAL_REQUEST]`).
+  - When `@coding` receives `[REVIEW_ARTIFACT]` from `coding-review` (with the `review-<slug>.md` path) **before** `[QUESTION_RELAY_REQUEST]`:
+    * **In Subagent Mode**: Forward `[REVIEW_ARTIFACT]` (with the `review-<slug>.md` path) to `caller_id` via `send_message` immediately so the main agent can read it before `[QUESTION_RELAY_REQUEST]` arrives.
+    * **In Standalone Mode**: Present/link `review-<slug>.md` to the user before prompting via `ask_question`.
 - **Unplanned Changes Validation Gate & Rework Routing**:
   - If unplanned changes (outside `plan.md`) are detected, `coding-review` triggers the Unplanned Changes Validation Gate via `[QUESTION_RELAY_REQUEST]` (forwarded to `caller_id` in Subagent Mode or prompted via `ask_question` in Standalone Mode).
   - If the user selects `No, revert all these changes` or provides custom write-in revision instructions, `coding-review` returns a `ReviewReport` with the revert/revision directive. `@coding` delegates the revert or revision to `@coding-develop` (and `@coding-deploy` if applicable), then re-runs `@coding-review` (which overwrites/updates `review-<slug>.md`).

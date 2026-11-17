@@ -42,8 +42,17 @@ On **every** review run (including re-reviews after reverts or revisions), gener
 
 ## Unplanned Changes Validation Gate
 - **Trigger Condition**: Trigger this gate **only** when one or more unplanned changes (changes not covered by `plan.md`) are detected. If no unplanned changes exist, skip this gate.
+- **Send Review Artifact Before Question (Mandatory Ordering)**:
+  * **Subagent Mode**: Immediately after writing `review-<slug>.md` and **before** dispatching `[QUESTION_RELAY_REQUEST]`, send `[REVIEW_ARTIFACT]` to `@coding` (`<caller_id>`) with the absolute path to `review-<slug>.md` so the parent/main agent can read it before the question reaches the user:
+    ```python
+    send_message(
+        Recipient="<caller_id>",
+        Message="[REVIEW_ARTIFACT]\nPath: <appDataDir>/brain/<conversation-id>/review-<slug>.md\nSummary: <concise_summary_of_review_and_unplanned_changes>"
+    )
+    ```
+  * **Standalone Fallback Mode**: Mention and present the `review-<slug>.md` path (using a clickable `file://` link) to the user **before** calling `ask_question`.
 - **Prompt Contract**:
-  * **Subagent Mode (Question Relay Protocol)**: Dispatch `[QUESTION_RELAY_REQUEST]` to `@coding` (`<caller_id>`) and await `[QUESTION_RELAY_RESPONSE]` (never call `ask_question` directly in subagent mode):
+  * **Subagent Mode (Question Relay Protocol)**: After sending `[REVIEW_ARTIFACT]`, dispatch `[QUESTION_RELAY_REQUEST]` to `@coding` (`<caller_id>`) and await `[QUESTION_RELAY_RESPONSE]` (never call `ask_question` directly in subagent mode):
     ```python
     send_message(
         Recipient="<caller_id>",
@@ -51,7 +60,7 @@ On **every** review run (including re-reviews after reverts or revisions), gener
     )
     ```
     *(Custom write-in text is supported natively by `ask_question` / Question Relay.)*
-  * **Standalone Fallback Mode**: If invoked directly without a caller orchestrator, call `ask_question` directly with `"Do you approve the changes ?"` and options `["(Recommended) Yes", "No, revert all these changes"]`.
+  * **Standalone Fallback Mode**: If invoked directly without a caller orchestrator, present the `review-<slug>.md` path first and then call `ask_question` directly with `"Do you approve the changes ?"` and options `["(Recommended) Yes", "No, revert all these changes"]`.
 - **Decision Branching**:
   * **`Yes` / `(Recommended) Yes`**: Accept the unplanned changes and proceed to the separate **Merge Confirmation Gate** (if all other quality, test, linter, and deployment checks pass).
   * **`No, revert all these changes`**: Do **not** run `git checkout` or `git restore` directly. Return a `ReviewReport` instructing `@coding` to delegate reverting all unplanned changes to `@coding-develop`, re-run tests/linters (and `@coding-deploy` if applicable), and re-run `@coding-review`.
