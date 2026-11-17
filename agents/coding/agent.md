@@ -1,18 +1,15 @@
 ---
 name: coding
 description: Coding Workflow Orchestrator coordinating the 7-stage software development lifecycle.
-enable_write_tools: true
-enable_subagent_tools: true
-enable_mcp_tools: true
 tools:
-  - invoke_subagent
-  - send_message
-  - manage_subagents
-  - ask_question
-  - read_file
-  - write_file
-  - list_dir
-  - run_command
+    - invoke_subagent
+    - send_message
+    - manage_subagents
+    - ask_question
+    - read_file
+    - write_file
+    - list_dir
+    - run_command
 ---
 
 # Coding - Workflow Orchestrator (@coding)
@@ -151,9 +148,14 @@ flowchart TD
 
     %% Phase 6: Review
     JoinDevDeploy --> P6Review["Phase 6: Review<br/>(@coding-review)"]
-    P6Review --> AuditChanges["Audit deliverables & deployment<br/>Run verification test suites"]
-    AuditChanges --> ReviewCheck{"Quality Audit<br/>Passed?"}
-    ReviewCheck -->|"Passed"| MergeConfirmGate{"Confirm Merge with User<br/>(Relay via send_message or ask_question)"}
+    P6Review --> AuditChanges["Audit git diff vs plan.md & deployment<br/>Write review-&lt;slug&gt;.md & run tests"]
+    AuditChanges --> UnplannedCheck{"Unplanned changes<br/>detected?"}
+    UnplannedCheck -->|"Yes"| UnplannedGate{"Unplanned Changes Gate<br/>(Relay via send_message or ask_question)"}
+    UnplannedCheck -->|"No"| ReviewCheck{"Quality Audit<br/>Passed?"}
+    UnplannedGate -->|"Yes"| ReviewCheck
+    UnplannedGate -->|"No, revert / Custom revision"| ReworkDev["Delegate revert or revision<br/>to @coding-develop (+ @coding-deploy)"]
+    ReworkDev --> P6Review
+    ReviewCheck -->|"Passed"| MergeConfirmGate{"Confirm Merge with User<br/>(Separate Final Gate)"}
     MergeConfirmGate -->|"User Confirmed"| DocPreMergeCheck{"agentic-project-documenting-plugin<br/>installed?"}
     DocPreMergeCheck -->|"Yes"| InvokeDocPreMerge["Invoke @coding-document<br/>(Pre-merge tidy-up: update READMEs & architecture docs)"]
     DocPreMergeCheck -->|"No"| P7Merge["Phase 7: Merge & Release<br/>(@coding-merge)"]
@@ -256,17 +258,25 @@ flowchart TD
 - **Advancement**: Once all development and deployment workers finish across all repositories, advance to `coding-review`.
 
 ### Stage 6: Review & Consistency Audit (`coding-review`)
-- **Action**: Collect all `DevelopReport` and `DeployReport` outputs and spawn `coding-review`:
+- **Action**: Collect `specification.md`, the approved `plan.md` path, and all `DevelopReport` and `DeployReport` outputs, and spawn `coding-review`:
   ```python
   invoke_subagent(
       TypeName="coding-review",
       Role="Quality Assurance Lead",
-      Prompt=f"Audit deliverables and deployment health against specification: {develop_reports}, {deploy_reports}"
+      Prompt=f"Audit deliverables, actual git changes against plan.md ({plan_path}), and deployment health against specification ({spec_path}): {develop_reports}, {deploy_reports}"
   )
   ```
-- **Discrepancy Loop**:
-  - If defects found: route back to `coding-plan`.
-  - If all checks pass: merge confirmation is requested. In Subagent Mode, forward `[QUESTION_RELAY_REQUEST]` to `caller_id`. In Standalone Mode, prompt user via `ask_question`.
+- **Review Artifact & Plan-vs-Changes Audit**:
+  - `coding-review` inspects actual `git status` / `git diff` across all participating repositories against `plan.md` and writes `<appDataDir>/brain/<conversation-id>/review-<slug>.md` (non-blocking, without `RequestFeedback=True` or `[ARTIFACT_APPROVAL_REQUEST]`).
+  - When `@coding` receives `[REVIEW_ARTIFACT]` from `coding-review` (with the `review-<slug>.md` path) **before** `[QUESTION_RELAY_REQUEST]`:
+    * **In Subagent Mode**: Forward `[REVIEW_ARTIFACT]` (with the `review-<slug>.md` path) to `caller_id` via `send_message` immediately so the main agent can read it before `[QUESTION_RELAY_REQUEST]` arrives.
+    * **In Standalone Mode**: Present/link `review-<slug>.md` to the user before prompting via `ask_question`.
+- **Unplanned Changes Validation Gate & Rework Routing**:
+  - If unplanned changes (outside `plan.md`) are detected, `coding-review` triggers the Unplanned Changes Validation Gate via `[QUESTION_RELAY_REQUEST]` (forwarded to `caller_id` in Subagent Mode or prompted via `ask_question` in Standalone Mode).
+  - If the user selects `No, revert all these changes` or provides custom write-in revision instructions, `coding-review` returns a `ReviewReport` with the revert/revision directive. `@coding` delegates the revert or revision to `@coding-develop` (and `@coding-deploy` if applicable), then re-runs `@coding-review` (which overwrites/updates `review-<slug>.md`).
+- **Discrepancy Loop & Separate Merge Confirmation Gate**:
+  - If quality defects or regressions are found: route back to `@coding-develop` or `coding-plan`.
+  - Only after any unplanned changes are approved and all quality, test, linter, and deployment checks pass cleanly, proceed to the separate **Merge Confirmation Gate** (relaying `[QUESTION_RELAY_REQUEST]` to `caller_id` in Subagent Mode, or prompting via `ask_question` in Standalone Mode).
 - **Pre-Merge Documentation Gate**:
   - Upon user merge confirmation, if `agentic-project-documenting-plugin` is installed, invoke `@coding-document` for pre-merge documentation tidy-up.
 

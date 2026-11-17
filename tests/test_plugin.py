@@ -172,9 +172,6 @@ def test_subagents_frontmatter_and_permissions():
     assert deploy_md.exists()
     meta = parse_frontmatter(deploy_md)
     assert meta.get("name") == "coding-deploy"
-    assert meta.get("enable_write_tools") is True
-    assert meta.get("enable_subagent_tools") is True
-    assert meta.get("enable_mcp_tools") is True
     tools = meta.get("tools", [])
     for required_tool in ["run_command", "read_file", "list_dir", "write_file", "edit_file", "ask_question", "send_message", "invoke_subagent"]:
         assert required_tool in tools, f"coding-deploy must have '{required_tool}' tool"
@@ -182,8 +179,9 @@ def test_subagents_frontmatter_and_permissions():
     coding_md = PLUGIN_ROOT / "agents" / "coding" / "agent.md"
     meta_coding = parse_frontmatter(coding_md)
     assert meta_coding.get("name") == "coding"
-    assert meta_coding.get("enable_subagent_tools") is True
-    assert meta_coding.get("enable_write_tools") is True
+    coding_tools = meta_coding.get("tools", [])
+    assert "invoke_subagent" in coding_tools, "coding must have 'invoke_subagent' tool"
+    assert "write_file" in coding_tools, "coding must have 'write_file' tool"
 
     clarify_md = PLUGIN_ROOT / "agents" / "coding-clarify" / "agent.md"
     meta_clarify = parse_frontmatter(clarify_md)
@@ -437,3 +435,81 @@ def test_coding_orchestrator_pre_clarified_fast_path():
         assert "coding-clarify" in content, f"'coding-clarify' missing in {file_path.name}"
         assert "coding-specify" in content, f"'coding-specify' missing in {file_path.name}"
         assert "coding-plan" in content, f"'coding-plan' missing in {file_path.name}"
+
+
+def test_coding_review_plan_audit_and_artifact():
+    """Verify coding-review includes write_file, artifact-only guardrails, plan-vs-changes audit, and review-<slug>.md."""
+    review_md = PLUGIN_ROOT / "agents" / "coding-review" / "agent.md"
+    assert review_md.exists()
+
+    meta = parse_frontmatter(review_md)
+    tools = meta.get("tools", [])
+    assert "write_file" in tools, "coding-review must include 'write_file' in tools"
+
+    content = review_md.read_text(encoding="utf-8")
+    assert "review-<slug>.md" in content
+    assert "review-changes.md" in content
+    assert "kebab-case" in content
+    assert "[a-z0-9-]+" in content
+    assert "git status" in content
+    assert "git diff" in content
+    assert "plan.md" in content
+    assert "RequestFeedback=True" in content
+    assert "[ARTIFACT_APPROVAL_REQUEST]" in content
+    assert '"None"' in content
+    assert "Artifact-Only" in content
+    assert "MUST NEVER" in content
+
+    required_sections = [
+        "Plan vs. Actual Changes Audit",
+        "Specification Compliance Check",
+        "Cross-Repo Interface & Schema Compatibility",
+        "Unit Tests & Linter Verification Results",
+        "Local Deployment Health Status",
+    ]
+    for section in required_sections:
+        assert section in content, f"Required review section '{section}' missing in coding-review/agent.md"
+
+
+def test_coding_review_unplanned_changes_validation_gate():
+    """Verify coding-review Unplanned Changes Validation Gate and separation from Merge Confirmation Gate."""
+    review_md = PLUGIN_ROOT / "agents" / "coding-review" / "agent.md"
+    content = review_md.read_text(encoding="utf-8")
+
+    assert "Unplanned Changes Validation Gate" in content
+    assert "[REVIEW_ARTIFACT]" in content
+    assert content.index("[REVIEW_ARTIFACT]") < content.index('"Do you approve the changes ?"')
+    assert "Do you approve the changes ?" in content
+    assert "(Recommended) Yes" in content
+    assert "No, revert all these changes" in content
+    assert "[QUESTION_RELAY_REQUEST]" in content
+    assert "ask_question" in content
+    assert "ReviewReport" in content
+    assert "coding-develop" in content
+    assert "Separate Final Gate" in content or "Separate Merge Confirmation Gate" in content
+
+
+def test_coding_orchestrator_review_plan_handoff_and_rework():
+    """Verify orchestrator, skill, and catalog pass plan.md to coding-review and route revert/revision to coding-develop."""
+    files_to_check = [
+        PLUGIN_ROOT / "agents" / "coding" / "agent.md",
+        PLUGIN_ROOT / "skills" / "coding-orchestrator" / "SKILL.md",
+        PLUGIN_ROOT / "agents" / "agent.md",
+    ]
+    for file_path in files_to_check:
+        assert file_path.exists(), f"{file_path} must exist"
+        content = file_path.read_text(encoding="utf-8")
+        assert "plan.md" in content, f"'plan.md' handoff missing in {file_path.name}"
+        assert "review-<slug>.md" in content, f"'review-<slug>.md' missing in {file_path.name}"
+        assert "Unplanned Changes Validation Gate" in content, f"'Unplanned Changes Validation Gate' missing in {file_path.name}"
+        assert "No, revert all these changes" in content, f"'No, revert all these changes' missing in {file_path.name}"
+        assert "ReviewReport" in content, f"'ReviewReport' missing in {file_path.name}"
+        assert "@coding-develop" in content or "coding-develop" in content, f"'coding-develop' routing missing in {file_path.name}"
+
+    for orchestrator_file in [
+        PLUGIN_ROOT / "agents" / "coding" / "agent.md",
+        PLUGIN_ROOT / "skills" / "coding-orchestrator" / "SKILL.md",
+    ]:
+        orch_content = orchestrator_file.read_text(encoding="utf-8")
+        assert "[REVIEW_ARTIFACT]" in orch_content, f"[REVIEW_ARTIFACT] forwarding missing in {orchestrator_file.name}"
+

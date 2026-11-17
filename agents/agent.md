@@ -1,12 +1,9 @@
 ---
 name: coding-catalog
 description: Subagent architecture, registry catalog, and 7-stage software development lifecycle workflow guide.
-enable_write_tools: false
-enable_subagent_tools: false
-enable_mcp_tools: false
 tools:
-  - read_file
-  - list_dir
+    - read_file
+    - list_dir
 ---
 
 # Coding - Agentic Coding Subagents & Workflow (agents/agent.md)
@@ -54,7 +51,7 @@ Subagents are discovered dynamically and registered via `define_subagent` (or `d
 | **`@coding-plan`** | [`agents/coding-plan/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-plan/) | `True` | `False` | `True` | `write_file`, `read_file`, `list_dir`, `run_command`, `send_message` | Multi-repo task breakdown, deployment assessment, & branch planning |
 | **`@coding-develop`** | [`agents/coding-develop/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-develop/) | `True` | `False` | `True` | `read_file`, `write_file`, `edit_file`, `list_dir`, `run_command`, `search_web` | Isolated repo implementation, tests, linting, docs, and fix remediation |
 | **`@coding-deploy`** | [`agents/coding-deploy/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-deploy/) | `True` | `True` | `True` | `run_command`, `read_file`, `list_dir`, `write_file`, `edit_file`, `ask_question`, `send_message`, `invoke_subagent` | Local deployment execution, health monitoring, error investigation & fix orchestration |
-| **`@coding-review`** | [`agents/coding-review/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-review/) | `True` | `False` | `True` | `read_file`, `list_dir`, `run_command`, `ask_question`, `send_message` | Deliverables and deployment verification against specification; merge confirmation relay |
+| **`@coding-review`** | [`agents/coding-review/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-review/) | `True` | `False` | `True` | `read_file`, `write_file` (strictly `review-<slug>.md` artifacts), `list_dir`, `run_command`, `ask_question`, `send_message` | Plan-vs-Changes git audit, `review-<slug>.md` generation, deliverables & deployment verification against specification, unplanned changes & merge confirmation relay |
 | **`@coding-merge`** | [`agents/coding-merge/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-merge/) | `True` | `False` | `True` | `run_command`, `read_file`, `list_dir`, `ask_question`, `send_message` | Local branch merge with base checkout and branch cleanup, or remote Pull Request creation with Question Relay waiting gate, base branch synchronization, remote branch deletion, and remote tracking reference pruning |
 
 ### 1.3 Dual-Mode Orchestration & Anti-Direct-Coding Boundaries
@@ -145,10 +142,15 @@ coding-clarify ──> coding-specify ──> coding-plan ──> coding-develop
 - **Handoff**: Concludes with structured `DeployReport` JSON.
 
 ### Stage 6: Review (`coding-review`)
-- **Objective**: Validate all deliverables against the original specification, verify cross-repo contract compatibility, and confirm that all required local deployments succeeded.
-- **Discrepancy Routing**:
-  - If regressions or specification discrepancies are found: Route issues back to `coding-plan` via `@coding` with actionable feedback.
-  - If approved: Present validation summary to the user and request confirmation to proceed to merge (relaying upward via `[QUESTION_RELAY_REQUEST]` in Subagent Mode, or handled directly by `@coding` via `ask_question` in Phase 6 in Standalone Mode).
+- **Objective**: Audit actual repository changes (`git status` / `git diff`) against the approved `plan.md`, validate all deliverables against `specification.md`, verify cross-repo contract compatibility, and confirm that all required local deployments succeeded.
+- **Handoff & Review Artifact (`review-<slug>.md`)**:
+  - `@coding` passes the approved `plan.md` path alongside `specification.md`, `DevelopReport`s, and `DeployReport`s to `coding-review`.
+  - On every run, `coding-review` writes `<appDataDir>/brain/<conversation-id>/review-<slug>.md` without `RequestFeedback=True` and without `[ARTIFACT_APPROVAL_REQUEST]` (reporting `"None"` when no unplanned changes exist).
+- **Unplanned Changes Validation Gate & Discrepancy Routing**:
+  - If unplanned changes (outside `plan.md`) are detected, `coding-review` triggers the Unplanned Changes Validation Gate (`"Do you approve the changes ?"`) via `[QUESTION_RELAY_REQUEST]` (or `ask_question` in Standalone Mode).
+  - If the user selects `No, revert all these changes` or provides custom write-in revision instructions, `coding-review` returns a `ReviewReport` so `@coding` routes the revert or revision to `@coding-develop` (and `@coding-deploy` if applicable), followed by a fresh `@coding-review` pass.
+  - If regressions or specification discrepancies are found: Route issues back to `@coding-develop` or `coding-plan` via `@coding` with actionable feedback.
+  - **Separate Merge Confirmation Gate**: Only after any unplanned changes are approved and all quality, test, linter, and deployment checks pass, present validation summary and request confirmation to proceed to merge (relaying upward via `[QUESTION_RELAY_REQUEST]` in Subagent Mode, or handled directly by `@coding` via `ask_question` in Phase 6 in Standalone Mode).
 
 ### Stage 7: Release & Merge (`coding-merge`)
 - **Objective**: Safely integrate approved changes into repository release branches with complete cleanup.
