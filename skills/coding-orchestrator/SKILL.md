@@ -167,9 +167,14 @@ flowchart TD
 
     %% Phase 6: Review
     JoinDevDeploy --> P6Review["Phase 6: Review<br/>(@coding-review)"]
-    P6Review --> AuditChanges["Audit deliverables & deployment<br/>Run verification test suites"]
-    AuditChanges --> ReviewCheck{"Quality Audit<br/>Passed?"}
-    ReviewCheck -->|"Passed"| MergeConfirmGate{"Confirm Merge with User<br/>(Relay via send_message or ask_question)"}
+    P6Review --> AuditChanges["Audit git diff vs plan.md & deployment<br/>Write review-&lt;slug&gt;.md & run tests"]
+    AuditChanges --> UnplannedCheck{"Unplanned changes<br/>detected?"}
+    UnplannedCheck -->|"Yes"| UnplannedGate{"Unplanned Changes Gate<br/>(Relay via send_message or ask_question)"}
+    UnplannedCheck -->|"No"| ReviewCheck{"Quality Audit<br/>Passed?"}
+    UnplannedGate -->|"Yes"| ReviewCheck
+    UnplannedGate -->|"No, revert / Custom revision"| ReworkDev["Delegate revert or revision<br/>to @coding-develop (+ @coding-deploy)"]
+    ReworkDev --> P6Review
+    ReviewCheck -->|"Passed"| MergeConfirmGate{"Confirm Merge with User<br/>(Separate Final Gate)"}
     MergeConfirmGate -->|"User Confirmed"| DocPreMergeCheck{"agentic-project-documenting-plugin<br/>installed?"}
     DocPreMergeCheck -->|"Yes"| InvokeDocPreMerge["Invoke @coding-document<br/>(Pre-merge tidy-up: update READMEs & architecture docs)"]
     DocPreMergeCheck -->|"No"| P7Merge["Phase 7: Merge & Release<br/>(@coding-merge)"]
@@ -217,8 +222,10 @@ flowchart TD
    - If approved with multiple options, relays question to the user via `[QUESTION_RELAY_REQUEST]`.
    - Invokes `coding-develop` to implement the approved fix, then re-deploys and monitors.
 6. **`coding-review`**:
-   - Collects all develop and deploy reports. Confirms cross-repo consistency, spec compliance, and local deployment health.
-   - If defects found, loops back to `coding-plan`. If approved, requests merge confirmation directly or via `[QUESTION_RELAY_REQUEST]`.
+   - Receives `specification.md`, the approved `plan.md` path, and all `DevelopReport` and `DeployReport` outputs from `@coding`.
+   - Inspects actual `git status` / `git diff` across all participating repositories against `plan.md`, confirms cross-repo consistency, spec compliance, tests/linters, and local deployment health, and writes `<appDataDir>/brain/<conversation-id>/review-<slug>.md` (without `RequestFeedback=True` or `[ARTIFACT_APPROVAL_REQUEST]`).
+   - **Unplanned Changes Validation Gate**: If unplanned changes (outside `plan.md`) are detected, prompts `"Do you approve the changes ?"` via `[QUESTION_RELAY_REQUEST]` (or `ask_question` in Standalone Mode). If the user selects `No, revert all these changes` or provides custom write-in revision instructions, returns a `ReviewReport` so `@coding` delegates the revert or revision to `@coding-develop` (and `@coding-deploy` if applicable), then re-runs `@coding-review` (overwriting/updating `review-<slug>.md`).
+   - **Separate Merge Confirmation Gate**: Only after any unplanned changes are approved and all quality, test, linter, and deployment checks pass, requests merge confirmation directly or via `[QUESTION_RELAY_REQUEST]`. (If quality defects are found, loops back to `@coding-develop` or `coding-plan`.)
    - **Pre-Merge Documentation (Tidy Up)**: If `agentic-project-documenting-plugin` is installed, invoke `@coding-document` prior to merging to tidy up project and feature documentation, architecture diagrams, and ADRs.
 7. **`coding-merge`**:
    - Waits for all `coding-deploy` and all `coding-develop` to complete successfully.
