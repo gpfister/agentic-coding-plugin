@@ -173,8 +173,9 @@ def test_subagents_frontmatter_and_permissions():
     meta = parse_frontmatter(deploy_md)
     assert meta.get("name") == "coding-deploy"
     tools = meta.get("tools", [])
-    for required_tool in ["run_command", "read_file", "list_dir", "write_file", "edit_file", "ask_question", "send_message", "invoke_subagent"]:
+    for required_tool in ["run_command", "read_file", "list_dir", "write_file", "ask_question", "send_message", "invoke_subagent"]:
         assert required_tool in tools, f"coding-deploy must have '{required_tool}' tool"
+    assert "edit_file" not in tools, "coding-deploy must NOT declare 'edit_file'"
 
     coding_md = PLUGIN_ROOT / "agents" / "coding" / "agent.md"
     meta_coding = parse_frontmatter(coding_md)
@@ -512,4 +513,47 @@ def test_coding_orchestrator_review_plan_handoff_and_rework():
     ]:
         orch_content = orchestrator_file.read_text(encoding="utf-8")
         assert "[REVIEW_ARTIFACT]" in orch_content, f"[REVIEW_ARTIFACT] forwarding missing in {orchestrator_file.name}"
+
+
+def test_worktree_isolation_and_exclusive_code_authority():
+    """Verify worktree isolation lifecycle and exclusive coding-develop edit_file authority."""
+    for agent_dir in (PLUGIN_ROOT / "agents").iterdir():
+        if not agent_dir.is_dir():
+            continue
+        agent_md = agent_dir / "agent.md"
+        if not agent_md.exists():
+            continue
+        meta = parse_frontmatter(agent_md)
+        tools = meta.get("tools", [])
+        if agent_dir.name == "coding-develop":
+            assert "edit_file" in tools, "coding-develop must declare 'edit_file'"
+        else:
+            assert "edit_file" not in tools, f"{agent_dir.name} must NOT declare 'edit_file'"
+
+    develop_content = (PLUGIN_ROOT / "agents" / "coding-develop" / "agent.md").read_text(encoding="utf-8")
+    assert ".worktrees/" in develop_content
+    assert "git worktree add" in develop_content
+    assert "worktree_path" in develop_content
+    assert "DevelopReport" in develop_content
+
+    deploy_content = (PLUGIN_ROOT / "agents" / "coding-deploy" / "agent.md").read_text(encoding="utf-8")
+    assert "worktree_path" in deploy_content
+    assert "write_file` Restriction" in deploy_content or "deployment-issue" in deploy_content
+
+    review_content = (PLUGIN_ROOT / "agents" / "coding-review" / "agent.md").read_text(encoding="utf-8")
+    assert "worktree_path" in review_content
+
+    merge_content = (PLUGIN_ROOT / "agents" / "coding-merge" / "agent.md").read_text(encoding="utf-8")
+    assert "worktree remove" in merge_content
+    assert "worktree prune" in merge_content
+
+    for file_path in [
+        PLUGIN_ROOT / "agents" / "coding" / "agent.md",
+        PLUGIN_ROOT / "agents" / "agent.md",
+        PLUGIN_ROOT / "skills" / "coding-orchestrator" / "SKILL.md",
+        PLUGIN_ROOT / "rules" / "AGENTS.md",
+    ]:
+        content = file_path.read_text(encoding="utf-8")
+        assert "worktree_path" in content, f"'worktree_path' missing in {file_path}"
+        assert ".worktrees/" in content, f"'.worktrees/' missing in {file_path}"
 

@@ -141,10 +141,10 @@ flowchart TD
     InvokeDocPlan --> P4
 
     %% Phase 4: Development & Phase 5: Local Deployment (Per-Repo)
-    P4 --> ParallelDev["Fan out parallel workers<br/>per repo on isolated branches"]
-    ParallelDev --> DevWork["Implement code, tests, linting<br/>Return DevelopReport"]
+    P4 --> ParallelDev["Fan out parallel workers per repo<br/>Isolated worktrees (.worktrees/&lt;slug&gt;)"]
+    ParallelDev --> DevWork["Implement code, tests, linting in worktree<br/>Return DevelopReport (worktree_path, branch)"]
     DevWork --> DeployCheck{"Local deployment<br/>instructions exist?"}
-    DeployCheck -->|"Yes"| P5Deploy["Phase 5: Local Deployment<br/>(@coding-deploy per repo)"]
+    DeployCheck -->|"Yes"| P5Deploy["Phase 5: Local Deployment<br/>(@coding-deploy targeting worktree_path)"]
     DeployCheck -->|"No"| JoinDevDeploy["Synchronize Deliverables<br/>(All develop & deploy done)"]
 
     %% Phase 5: Deployment Execution, Monitoring & Error Loop
@@ -211,29 +211,31 @@ flowchart TD
    - In Subagent Mode, `@coding` forwards upward; in Standalone Mode, `@coding` presents interactive gate via `write_file(RequestFeedback=True)`.
    - Advances to `coding-develop` on approval (or routes to `coding-clarify` on rejection).
    - **Post-Plan Approval Documentation**: If `agentic-project-documenting-plugin` is installed, invoke `@coding-document` after plan approval to document architecture plans, work breakdowns, and formalize ADRs.
-4. **`coding-develop`**:
+4. **`coding-develop`** (Exclusive Code-Change Authority):
    - Fanned out in parallel per repository (`coding-develop-<repo>`).
-   - Scoped strictly to each repo directory. Writes code, tests, documentation, and verifies linting.
-   - Generates `DevelopReport`. Triggers `coding-deploy` immediately for repos with local deployment instructions.
+   - Keeps the primary repository working tree on `main`/`master` and creates/reuses an isolated Git worktree at `<repo_root>/.worktrees/<slug>` on `feature/<slug>`, `task/<slug>`, or `bugfix/<slug>` (ensuring `.worktrees/` is ignored).
+   - **Sole agent** authorized to modify repository source code, configs, and tests (`edit_file` is declared exclusively on `coding-develop`).
+   - Generates `DevelopReport` containing `worktree_path` and `branch`. `@coding` propagates `worktree_path` to `coding-deploy`, `coding-review`, and `coding-merge`. Triggers `coding-deploy` immediately for repos with local deployment instructions.
 5. **`coding-deploy`**:
-   - Runs local deployment and actively monitors container health, pod states, and service endpoints.
+   - Targets `worktree_path` exclusively (never the primary repository working tree) to run local deployment and monitor container health, pod states, and service endpoints.
+   - `edit_file` is prohibited; `write_file` is restricted to `deployment-issue*.md` artifacts; `run_command` is restricted to read-only/operational deployment and health commands.
    - On error, diagnoses root cause, writes `Deployment Issue` artifact (`deployment-issue.md`) without `RequestFeedback=True`, and dispatches `[ARTIFACT_APPROVAL_REQUEST]`.
    - In Subagent Mode, forwarded upward; in Standalone Mode, presented via `write_file(RequestFeedback=True)`.
    - If approved with multiple options, relays question to the user via `[QUESTION_RELAY_REQUEST]`.
-   - Invokes `coding-develop` to implement the approved fix, then re-deploys and monitors.
+   - Invokes `coding-develop` to implement the approved fix inside `worktree_path`, then re-deploys and monitors.
 6. **`coding-review`**:
-   - Receives `specification.md`, the approved `plan.md` path, and all `DevelopReport` and `DeployReport` outputs from `@coding`.
-   - Inspects actual `git status` / `git diff` across all participating repositories against `plan.md`, confirms cross-repo consistency, spec compliance, tests/linters, and local deployment health, and writes `<appDataDir>/brain/<conversation-id>/review-<slug>.md` (without `RequestFeedback=True` or `[ARTIFACT_APPROVAL_REQUEST]`).
+   - Receives `specification.md`, the approved `plan.md` path, and all `DevelopReport` (including `worktree_path` and `branch`) and `DeployReport` outputs from `@coding`.
+   - Inspects actual `git status` / `git diff` inside each `worktree_path` against `plan.md`, confirms cross-repo consistency, spec compliance, tests/linters inside `worktree_path`, and local deployment health, and writes `<appDataDir>/brain/<conversation-id>/review-<slug>.md` (without `RequestFeedback=True` or `[ARTIFACT_APPROVAL_REQUEST]`).
    - **Review Artifact Forwarding Before Question**: After writing `review-<slug>.md`, `@coding-review` sends `[REVIEW_ARTIFACT]` (containing the `review-<slug>.md` path) to `@coding` **before** dispatching `[QUESTION_RELAY_REQUEST]`. In Subagent Mode, `@coding` forwards `[REVIEW_ARTIFACT]` to `caller_id` via `send_message` so the main agent can read it before the question arrives; in Standalone Mode, `@coding` presents/links `review-<slug>.md` to the user before calling `ask_question`.
    - **Unplanned Changes Validation Gate**: If unplanned changes (outside `plan.md`) are detected, prompts `"Do you approve the changes ?"` via `[QUESTION_RELAY_REQUEST]` (or `ask_question` in Standalone Mode). If the user selects `No, revert all these changes` or provides custom write-in revision instructions, returns a `ReviewReport` so `@coding` delegates the revert or revision to `@coding-develop` (and `@coding-deploy` if applicable), then re-runs `@coding-review` (overwriting/updating `review-<slug>.md`).
    - **Separate Merge Confirmation Gate**: Only after any unplanned changes are approved and all quality, test, linter, and deployment checks pass, requests merge confirmation directly or via `[QUESTION_RELAY_REQUEST]`. (If quality defects are found, loops back to `@coding-develop` or `coding-plan`.)
    - **Pre-Merge Documentation (Tidy Up)**: If `agentic-project-documenting-plugin` is installed, invoke `@coding-document` prior to merging to tidy up project and feature documentation, architecture diagrams, and ADRs.
 7. **`coding-merge`**:
    - Waits for all `coding-deploy` and all `coding-develop` to complete successfully.
-   - **Local Release**: Checks out base branch (`git checkout <base>`), merges locally (`git merge <branch>`), verifies base checkout, and safely deletes the local feature branch (`git branch -d <branch>`) when no remote exists.
+   - **Local Release**: Merges `<branch>` into `<base>` in the primary repository working tree (`git checkout <base>` + `git merge <branch>`), verifies `<base>` checkout, removes the isolated worktree (`git worktree remove <worktree_path>` + `git worktree prune`), and safely deletes the local feature branch (`git branch -d <branch>`) when no remote exists.
    - **Remote Release**: Pushes branch (`git push -u origin <branch>`), checks `gh auth status`, and creates Pull Request (`gh pr create`). If `gh` is unauthenticated or missing, generates GitHub web compare URL (`https://github.com/<owner>/<repo>/compare/<base>...<branch>?expand=1`) and delegates instructions to `@coding` via Question Relay Protocol.
    - **Hybrid PR Waiting Gate**: Inspects PR status via `gh pr view <pr_number> --json state,reviewDecision,mergedAt,url`. To avoid Antigravity 60-second subagent timeouts, delegates waiting choices to the parent orchestrator via `[QUESTION_RELAY_REQUEST]` without blocking or sleeping in a loop.
-   - **Post-Merge Base Synchronization & Complete Cleanup**: When PR is merged, switches to base branch (`git checkout <base>`), fast-forwards base branch (`git pull --ff-only origin <base>`), deletes remote feature branch (`git push origin --delete <branch>`), safely removes local feature branch (`git branch -d <branch>`), prunes remote tracking references (`git fetch --prune origin`), and verifies repository remains on `<base>`.
+   - **Post-Merge Base Synchronization & Complete Cleanup**: When PR is merged, ensures primary repo is on `<base>`, fast-forwards base branch (`git pull --ff-only origin <base>`), removes the isolated worktree (`git worktree remove <worktree_path>` + `git worktree prune`), deletes remote feature branch (`git push origin --delete <branch>`), safely removes local feature branch (`git branch -d <branch>`), prunes remote tracking references (`git fetch --prune origin`), and verifies primary repository remains on `<base>`.
    - **Post-Merge Documentation (At the End)**: If `agentic-project-documenting-plugin` is installed, invoke `@coding-document` at the end to update git status, branch states, and changelogs in the Obsidian vault.
 
 ---

@@ -22,11 +22,11 @@ Validate that deliverables from all `coding-develop` and `coding-deploy` workers
 - **Read-Only `run_command` Scope**: Use `run_command` exclusively to run automated test suites (`pytest`, `npm test`, `cargo test`), linters, and inspect git state (`git status`, `git diff`, `git merge-base`). You **MUST NEVER** run `git checkout`, `git restore`, or modify repository files directly—all reverts or code edits must be delegated back through `@coding` to `@coding-develop`.
 
 ## Plan-vs-Changes Audit & Verification Checklist
-1. **Collect Deliverables**: Gather `specification.md`, the approved `plan.md`, all `DevelopReport` outputs, and all `DeployReport` outputs (`status: SUCCESS` for repositories requiring local deployment).
-2. **Inspect Actual Git Changes**: Across **every** participating repository listed in `plan.md` (and any additional workspace repositories modified during the session), run `git status` and `git diff` against the base branch / merge base.
+1. **Collect Deliverables**: Gather `specification.md`, the approved `plan.md`, all `DevelopReport` outputs (including each repository's `worktree_path` and `branch`), and all `DeployReport` outputs (`status: SUCCESS` for repositories requiring local deployment).
+2. **Inspect Actual Git Changes in `worktree_path`**: Across **every** participating repository listed in `plan.md` (and any additional workspace repositories modified during the session), run `git status` and `git diff` inside `worktree_path` (passed by `@coding`) against the base branch / merge base. Never inspect or mutate the primary repository working tree (which remains on `main`/`master`).
 3. **Plan-vs-Changes Comparison**: Compare observed file modifications, additions, deletions, and behavioral changes against the scope, affected files, and tasks defined in `plan.md`. Classify any change not covered by `plan.md` as an **unplanned change** and document it with a concise justification (e.g., discovered dependency, bugfix during deployment, refactor, or unexplained drift).
 4. **Specification & Contract Compliance**: Verify 100% alignment with `specification.md` and full compatibility of cross-repository interfaces, schemas, and API contracts.
-5. **Tests & Linters**: Confirm all unit tests and linters pass cleanly across all participating repositories.
+5. **Tests & Linters in `worktree_path`**: Execute and confirm all unit tests and linters pass cleanly inside each repository's `worktree_path`.
 
 ## Review Artifact (`review-<slug>.md`)
 On **every** review run (including re-reviews after reverts or revisions), generate a single combined review artifact:
