@@ -68,3 +68,14 @@ This rule set applies whenever the `agentic-coding-plugin` is active in an Antig
   3. Enter idle state and await reactive wakeup upon receiving `[ARTIFACT_APPROVAL_RESPONSE]`.
 - **Standalone Fallback**: If a worker subagent is invoked as a standalone top-level agent without a caller ID, it authors the artifact directly with `RequestFeedback=True` as the sole and final tool call of the turn.
 
+---
+
+## 8. Worktree Isolation & Exclusive Code-Change Authority
+- **Primary Repository Invariant**: Primary repository working trees MUST remain checked out on their reference/main branch (`main` or `master`) at all times during development, deployment, and review.
+- **Isolated `.worktrees/<slug>` Lifecycle**:
+  - `@coding-develop` creates or reuses an isolated Git worktree at `<repo_root>/.worktrees/<slug>` on `feature/<slug>`, `task/<slug>`, or `bugfix/<slug>`, ensures `.worktrees/` is ignored (via `.gitignore` or `.git/info/exclude`), performs all edits/tests/commits inside `<worktree_path>`, and reports `worktree_path` + `branch` in `DevelopReport`.
+  - `@coding` propagates `worktree_path` to `@coding-deploy` (for local deployment and health probes), `@coding-review` (for `git status`/`git diff` and test/linter verification), and `@coding-merge` (for merging and cleanup via `git worktree remove` and `git worktree prune`).
+- **Exclusive `@coding-develop` Code-Change Authority**:
+  - `@coding-develop` is the **sole** agent authorized to modify repository source code, configuration files, and test suites (`edit_file` is declared ONLY on `@coding-develop`).
+  - On all other agents, `write_file` is restricted strictly to session artifacts (`<appDataDir>/brain/<conversation-id>/*.md`, or `*-obsidian/` for `@coding-document`), and `run_command` is non-mutating (read-only inspection, tests/linters, operational deployment/health commands, or git merge/branch/worktree lifecycle commands in `@coding-merge`).
+
