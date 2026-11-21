@@ -23,6 +23,7 @@ The `coding` subagent guides software requests through a rigorous, multi-agent d
 > - **QA & Code Review**: Delegated to `@coding-review`.
 > - **Release Merging & PR Operations**: Delegated to `@coding-merge`.
 > - **Obsidian Vault Documentation**: Delegated to `@coding-document`.
+> - **UI/UX Design & PenPot Authoring (Optional)**: Delegated to `@coding-design` when `agentic-design-plugin` is installed.
 
 ### Constrained Tool Boundaries
 - **`write_file`**: Strictly permitted **ONLY** for presenting interactive approval gate artifacts (`<appDataDir>/brain/<id>/*.md`) in **Standalone Mode**. Calling `write_file` on workspace or repository paths is strictly forbidden.
@@ -119,9 +120,12 @@ flowchart TD
     RelaySpecUp --> AwaitSpecResp["Await [ARTIFACT_APPROVAL_RESPONSE]<br/>from caller_id"]
     SpecGateRoot --> SpecGate{"User Decision on<br/>specification.md?"}
     AwaitSpecResp --> SpecGate
-    SpecGate -->|"Approved"| SpecApproved["Forward [ARTIFACT_APPROVAL_RESPONSE: APPROVED]<br/>Advance to Phase 3"]
+    SpecGate -->|"Approved"| SpecApproved["Forward [ARTIFACT_APPROVAL_RESPONSE: APPROVED]<br/>Specification approved"]
     SpecGate -->|"Rejected"| SpecRejected["Forward [ARTIFACT_APPROVAL_RESPONSE: REJECTED]<br/>Route back to Phase 1"]
-    SpecApproved --> P3
+    SpecApproved --> DesignCheck{"UI/UX feature &<br/>agentic-design-plugin<br/>installed?"}
+    DesignCheck -->|"Yes"| InvokeDesign["Invoke @coding-design<br/>(PenPot design & design-spec.md)"]
+    DesignCheck -->|"No / Skip"| P3
+    InvokeDesign --> P3
     SpecRejected --> P1
 
     %% Phase 3: Planning
@@ -204,6 +208,7 @@ flowchart TD
    - Synthesizes findings into `specification.md` and writes it to disk without `RequestFeedback=True`.
    - Dispatches `[ARTIFACT_APPROVAL_REQUEST]`. In Subagent Mode, `@coding` forwards upward; in Standalone Mode, `@coding` presents interactive gate via `write_file(RequestFeedback=True)` as sole tool call of turn.
    - Advances to `coding-plan` on approval (or routes to `coding-clarify` on rejection).
+   - **Optional UI/UX Design (`@coding-design`)**: Dynamically detect whether `agentic-design-plugin` is installed. For UI/UX-related features (wireframes, mockups, layouts, component designs, design tokens, or PenPot inspections), optionally invoke `@coding-design` before or alongside `@coding-plan` and `@coding-develop` to produce/inspect PenPot designs and generate `design-spec.md` (forwarding `[QUESTION_RELAY_REQUEST]` / `[ARTIFACT_APPROVAL_REQUEST]` in Subagent Mode or presenting at the root in Standalone Mode). Pass the approved `design-spec.md` and PenPot references to `@coding-plan` and `@coding-develop`. If `agentic-design-plugin` is not installed (or the task has no UI/UX scope), gracefully skip `@coding-design` and proceed directly.
 3. **`coding-plan`**:
    - Decomposes work per repository and determines branch names (`feature/*`, `task/*`, `bugfix/*`).
    - Assesses if local deployment is required for each repository (Docker, Docker Compose, Terraform to local Kubernetes/Minikube, scripts).

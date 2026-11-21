@@ -38,6 +38,7 @@ This rule set applies whenever the `agentic-coding-plugin` is active in an Antig
 
 ## 5. Companion Subagents & Delegation
 - **Local Deployment & Health Monitoring**: Local deployment execution and monitoring is handled by `@coding-deploy`.
+- **UI/UX Design & PenPot Authoring**: UI/UX design authoring, PenPot inspection, and design token/spec generation are handled by `@coding-design` (`agentic-design-plugin`).
 - **Issue Investigation**: Complex root-cause diagnosis, defect tracing, and fix proposals are handled by `@coding-investigate` (`agentic-issue-investigation-plugin`).
 - **Telemetry & Stream Surveillance**: Real-time log, container, and serial stream monitoring is handled by `@coding-monitor` (`agentic-task-monitoring-plugin`).
 - **Topic & Literature Research**: Deep web research, technical literature synthesis, and documentation lookups are handled by `@coding-research` (`agentic-topic-researching-plugin`).
