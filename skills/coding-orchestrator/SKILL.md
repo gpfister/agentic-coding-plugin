@@ -82,9 +82,11 @@ sequenceDiagram
 
 When `@coding` is invoked with a prompt containing a pre-clarified technical specification, approved architecture document, or approved issue assessment report (such as handoffs from `@coding-investigate` or `/project-grooming`):
 - **Skip Phase 1 (`coding-clarify`)**: Do not interrogate the user again for details already established in the upstream report.
-- **Fast-Path to Phase 2 / Phase 3**:
+- **Fast-Path to Phase 2 / UI Design / Phase 3**:
   - If `specification.md` is not yet generated: route directly to Phase 2 (`coding-specify`) to synthesize the specification.
-  - If `specification.md` already exists and is approved: advance directly to Phase 3 (`coding-plan`).
+  - If `specification.md` already exists and is approved: check whether `design-spec.md` is already approved (e.g., handoff from standalone `@coding-design`).
+    - If `design-spec.md` is already approved: advance directly to Phase 3 (`coding-plan`), passing the approved `design-spec.md` and PenPot references.
+    - Otherwise: route through `DesignCheck` (invoking `@coding-design` if `agentic-design-plugin` is installed AND the task involves UI/UX scope) before entering Phase 3 (`coding-plan`).
 - **Approval Gate Preservation**: You **MUST NEVER** bypass Phase 2 (`specification.md`) or Phase 3 (`plan.md`) approval gates. All artifacts must be formally presented and approved before spawning `@coding-develop`.
 
 ---
@@ -98,7 +100,9 @@ flowchart TD
     
     %% Fast Path Branch
     InputCheck -->|"Yes (Pre-Clarified)"| FastPathSpecCheck{"specification.md<br/>already approved?"}
-    FastPathSpecCheck -->|"Yes"| P3["Phase 3: Planning<br/>(@coding-plan)"]
+    FastPathSpecCheck -->|"Yes"| FastPathDesignCheck{"design-spec.md<br/>already approved?"}
+    FastPathDesignCheck -->|"Yes"| P3["Phase 3: Planning<br/>(@coding-plan)"]
+    FastPathDesignCheck -->|"No"| DesignCheck
     FastPathSpecCheck -->|"No"| P2["Phase 2: Specification<br/>(@coding-specify)"]
     
     %% Standard Entrypoint: Phase 1 Clarification
@@ -123,9 +127,20 @@ flowchart TD
     SpecGate -->|"Approved"| SpecApproved["Forward [ARTIFACT_APPROVAL_RESPONSE: APPROVED]<br/>Specification approved"]
     SpecGate -->|"Rejected"| SpecRejected["Forward [ARTIFACT_APPROVAL_RESPONSE: REJECTED]<br/>Route back to Phase 1"]
     SpecApproved --> DesignCheck{"UI/UX feature &<br/>agentic-design-plugin<br/>installed?"}
-    DesignCheck -->|"Yes"| InvokeDesign["Invoke @coding-design<br/>(PenPot design & design-spec.md)"]
     DesignCheck -->|"No / Skip"| P3
-    InvokeDesign --> P3
+    DesignCheck -->|"Yes"| InvokeDesign["Invoke @coding-design<br/>(PenPot design & design-spec.md)"]
+    InvokeDesign --> DesignSubagent["Write design-spec.md to disk<br/>Relay [ARTIFACT_APPROVAL_REQUEST]"]
+    DesignSubagent --> ModeCheckDesign{"Operating Mode?"}
+    ModeCheckDesign -->|"Subagent Mode"| RelayDesignUp["Forward [ARTIFACT_APPROVAL_REQUEST]<br/>to caller_id via send_message"]
+    ModeCheckDesign -->|"Standalone Mode"| DesignGateRoot["@coding calls write_file<br/>(RequestFeedback=True, sole tool call)"]
+    RelayDesignUp --> AwaitDesignResp["Await [ARTIFACT_APPROVAL_RESPONSE]<br/>from caller_id"]
+    DesignGateRoot --> DesignGate{"User Decision on<br/>design-spec.md?"}
+    AwaitDesignResp --> DesignGate
+    DesignGate -->|"Approved"| DesignApproved["Forward [ARTIFACT_APPROVAL_RESPONSE: APPROVED]<br/>Pass design-spec.md & PenPot refs"]
+    DesignApproved --> P3
+    DesignGate -->|"Rejected"| DesignFeedbackEval{"Evaluate feedback vs<br/>specification.md"}
+    DesignFeedbackEval -->|"Functional / Scope Change<br/>(Branch A)"| P2
+    DesignFeedbackEval -->|"Visual / Layout / Styling Only<br/>(Branch B)"| InvokeDesign
     SpecRejected --> P1
 
     %% Phase 3: Planning
@@ -207,9 +222,16 @@ flowchart TD
 2. **`coding-specify`**:
    - Synthesizes findings into `specification.md` and writes it to disk without `RequestFeedback=True`.
    - Dispatches `[ARTIFACT_APPROVAL_REQUEST]`. In Subagent Mode, `@coding` forwards upward; in Standalone Mode, `@coding` presents interactive gate via `write_file(RequestFeedback=True)` as sole tool call of turn.
-   - Advances to `coding-plan` on approval (or routes to `coding-clarify` on rejection).
-   - **Optional UI/UX Design (`@coding-design`)**: Dynamically detect whether `agentic-design-plugin` is installed. For UI/UX-related features (wireframes, mockups, layouts, component designs, design tokens, or PenPot inspections), optionally invoke `@coding-design` before or alongside `@coding-plan` and `@coding-develop` to produce/inspect PenPot designs and generate `design-spec.md` (forwarding `[QUESTION_RELAY_REQUEST]` / `[ARTIFACT_APPROVAL_REQUEST]` in Subagent Mode or presenting at the root in Standalone Mode). Pass the approved `design-spec.md` and PenPot references to `@coding-plan` and `@coding-develop`. If `agentic-design-plugin` is not installed (or the task has no UI/UX scope), gracefully skip `@coding-design` and proceed directly.
+   - On approval, routes to `DesignCheck` (or advances directly to `coding-plan` if `DesignCheck` is skipped); on rejection, routes back to `coding-clarify`.
+   - **UI/UX Design (`@coding-design`, strictly between `coding-specify` and `coding-plan`)**:
+     - **Dual-Condition Trigger (`DesignCheck`)**: Invoke `@coding-design` **only when BOTH** `agentic-design-plugin` is installed **AND** the task involves UI/UX changes (wireframes, mockups, layouts, frontend components, design tokens, or PenPot inspections). Otherwise, gracefully skip `@coding-design` and advance directly to `coding-plan`.
+     - **Dual-Mode Relays**: Forward any `[QUESTION_RELAY_REQUEST]` and `[ARTIFACT_APPROVAL_REQUEST]` for `design-spec.md` upward to `caller_id` in Subagent Mode, or present `write_file(RequestFeedback=True)` as the sole tool call of the turn in Standalone Mode.
+     - **Design Change-Request Loop**: On `design-spec.md` rejection (`status: "REJECTED"`), evaluate the user's feedback against `specification.md`:
+       - **Branch A — Functional, Scope, Requirement, or User-Flow Changes (including mixed feedback)**: Route to `@coding-specify` with the rejection feedback and current `specification.md` to update `specification.md`, followed by its `[ARTIFACT_APPROVAL_REQUEST]` gate (if approved, re-invoke `@coding-design`; if rejected, follow `SpecRejected` -> `coding-clarify`).
+       - **Branch B — Purely Visual, Layout, or Styling Feedback (within existing `specification.md`)**: Re-invoke `@coding-design` directly with the rejection feedback to update PenPot designs and `design-spec.md`, then re-present the `[ARTIFACT_APPROVAL_REQUEST]` gate.
+     - **Downstream Handoff**: Upon `design-spec.md` approval (or when already approved in Pre-Clarified Fast-Path), pass the approved `design-spec.md` path and PenPot references to both `@coding-plan` and `@coding-develop`.
 3. **`coding-plan`**:
+   - Consumes `specification.md` and, when present, the approved `design-spec.md` and PenPot references for task decomposition and component planning.
    - Decomposes work per repository and determines branch names (`feature/*`, `task/*`, `bugfix/*`).
    - Assesses if local deployment is required for each repository (Docker, Docker Compose, Terraform to local Kubernetes/Minikube, scripts).
    - Produces `plan.md` on disk without `RequestFeedback=True` and dispatches `[ARTIFACT_APPROVAL_REQUEST]`.
@@ -217,6 +239,7 @@ flowchart TD
    - Advances to `coding-develop` on approval (or routes to `coding-clarify` on rejection).
    - **Post-Plan Approval Documentation**: If `agentic-project-documenting-plugin` is installed, invoke `@coding-document` after plan approval to document architecture plans, work breakdowns, and formalize ADRs.
 4. **`coding-develop`** (Exclusive Code-Change Authority):
+   - Consumes `plan.md`, `specification.md`, and, when present, the approved `design-spec.md` and PenPot references for UI implementation.
    - Fanned out in parallel per repository (`coding-develop-<repo>`).
    - Keeps the primary repository working tree on `main`/`master` and creates/reuses an isolated Git worktree at `<repo_root>/.worktrees/<slug>` on `feature/<slug>`, `task/<slug>`, or `bugfix/<slug>` (ensuring `.worktrees/` is ignored).
    - **Sole agent** authorized to modify repository source code, configs, and tests (`edit_file` is declared exclusively on `coding-develop`).

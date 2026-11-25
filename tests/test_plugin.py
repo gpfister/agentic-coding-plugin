@@ -557,3 +557,40 @@ def test_worktree_isolation_and_exclusive_code_authority():
         assert "worktree_path" in content, f"'worktree_path' missing in {file_path}"
         assert ".worktrees/" in content, f"'.worktrees/' missing in {file_path}"
 
+
+def test_coding_orchestrator_ui_design_stage_and_change_request_loop():
+    """Verify UI Design Stage placement, Dual-Mode DesignGate, Change-Request Loop, and AGENTS.md relay consistency."""
+    skill_md = PLUGIN_ROOT / "skills" / "coding-orchestrator" / "SKILL.md"
+    content = skill_md.read_text(encoding="utf-8")
+
+    # Conflicting parallel/alongside wording must be removed
+    assert "alongside `@coding-plan` and `@coding-develop`" not in content
+    assert "alongside @coding-plan and @coding-develop" not in content
+
+    # Section 3: Pre-Clarified Fast-Path checks design-spec.md and routes through DesignCheck
+    assert "design-spec.md" in content
+    assert "FastPathDesignCheck" in content
+
+    # Section 4: Mermaid flowchart models DesignCheck, DesignGate, and Branch A/B rejection routing
+    assert "DesignCheck" in content
+    assert "InvokeDesign" in content
+    assert "DesignGate" in content
+    assert "DesignFeedbackEval" in content
+    assert "DesignFeedbackEval -->|\"Functional / Scope Change<br/>(Branch A)\"| P2" in content
+    assert "DesignFeedbackEval -->|\"Visual / Layout / Styling Only<br/>(Branch B)\"| InvokeDesign" in content
+
+    # Section 5: Strict stage placement, Design Change-Request Loop, and downstream handoffs
+    assert "strictly between `coding-specify` and `coding-plan`" in content
+    assert "Design Change-Request Loop" in content
+    assert "PenPot" in content
+    assert "@coding-plan" in content
+    assert "@coding-develop" in content
+
+    # rules/AGENTS.md Sections 6 & 7 reference @coding-design
+    rules_content = (PLUGIN_ROOT / "rules" / "AGENTS.md").read_text(encoding="utf-8")
+    sec6 = rules_content.split("## 6. Question Relay Protocol")[1].split("## 7. Artifact Approval Relay Protocol")[0]
+    sec7 = rules_content.split("## 7. Artifact Approval Relay Protocol")[1].split("## 8. Worktree Isolation")[0]
+    assert "@coding-design" in sec6, "@coding-design must be listed in rules/AGENTS.md Section 6"
+    assert "@coding-design" in sec7, "@coding-design must be listed in rules/AGENTS.md Section 7"
+
+
