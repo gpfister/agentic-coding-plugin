@@ -594,3 +594,33 @@ def test_coding_orchestrator_ui_design_stage_and_change_request_loop():
     assert "@coding-design" in sec7, "@coding-design must be listed in rules/AGENTS.md Section 7"
 
 
+def test_coding_document_worktree_defer_pr_and_question_relay():
+    """Verify @coding-document defer_pr coordination, Question Relay routing, and code-only @coding-merge scope."""
+    files_to_check = [
+        PLUGIN_ROOT / "agents" / "coding" / "agent.md",
+        PLUGIN_ROOT / "skills" / "coding-orchestrator" / "SKILL.md",
+        PLUGIN_ROOT / "rules" / "AGENTS.md",
+    ]
+    for file_path in files_to_check:
+        content = file_path.read_text(encoding="utf-8")
+        assert "defer_pr=true" in content, f"defer_pr=true missing in {file_path}"
+        assert "defer_pr=false" in content, f"defer_pr=false missing in {file_path}"
+        assert "@coding-document" in content, f"@coding-document missing in {file_path}"
+        assert "docs/<slug>" in content, f"docs/<slug> missing in {file_path}"
+        assert "*-obsidian/" in content, f"*-obsidian/ missing in {file_path}"
+        assert "@coding-merge" in content and "code repositories exclusively" in content, (
+            f"code-only @coding-merge scope missing in {file_path}"
+        )
+
+    coding_agent = (PLUGIN_ROOT / "agents" / "coding" / "agent.md").read_text(encoding="utf-8")
+    assert "`@coding-clarify`, `@coding-deploy`, `@coding-review`, `@coding-merge`, `@coding-document`" in coding_agent
+
+    orchestrator_skill = (PLUGIN_ROOT / "skills" / "coding-orchestrator" / "SKILL.md").read_text(encoding="utf-8")
+    assert "`@coding-clarify`, `@coding-deploy`, `@coding-review`, `@coding-merge`, `@coding-document`" in orchestrator_skill
+
+    rules_content = (PLUGIN_ROOT / "rules" / "AGENTS.md").read_text(encoding="utf-8")
+    sec6 = rules_content.split("## 6. Question Relay Protocol")[1].split("## 7. Artifact Approval Relay Protocol")[0]
+    assert "@coding-document" in sec6, "@coding-document must be listed in rules/AGENTS.md Section 6"
+
+
+

@@ -28,10 +28,10 @@ This rule set applies whenever the `agentic-coding-plugin` is active in an Antig
 
 ## 4. Documentation Delegation & Obsidian Vault Integration
 - When `agentic-project-documenting-plugin` is installed, all documentation tasks (project documentation, feature specifications, architecture designs, ADRs, session logs, and git status updates) must be delegated to `@coding-document`.
-- `@coding` must invoke `@coding-document` to maintain documentation only after:
-  - **After the Plan is Approved**: Document architecture designs, work breakdowns, approved feature specifications, and formalize ADRs.
-  - **Before Merging (Pre-Merge)**: Perform pre-merge documentation tidy-up across READMEs, architecture records, and feature specs upon merge confirmation.
-  - **At the End (Post-Merge)**: Update repository git statuses (`agentic-obsidian/git-status.md`), branch topologies, and release changelogs once merge concludes.
+- `@coding` must pass a consistent `slug` and explicit `defer_pr` directive when invoking `@coding-document` across the three lifecycle hooks:
+  - **After the Plan is Approved**: Invoke `@coding-document` with `slug=<slug>` and `defer_pr=true` to document architecture designs, work breakdowns, approved feature specifications, and formalize ADRs in `<vault_root>/.worktrees/<slug>` (branch `docs/<slug>`) without opening a PR yet.
+  - **Before Merging (Pre-Merge)**: Invoke `@coding-document` with the same `slug=<slug>` and `defer_pr=true` to perform pre-merge documentation tidy-up across architecture records and feature specs upon merge confirmation, committing incrementally to `docs/<slug>` without opening a PR yet.
+  - **At the End (Post-Merge)**: Invoke `@coding-document` with the same `slug=<slug>` and `defer_pr=false` to update repository git statuses (`agentic-obsidian/git-status.md`), branch topologies, and release changelogs once merge concludes, and execute `*-obsidian/` PR/merge and worktree cleanup.
 - If `agentic-project-documenting-plugin` is not installed, skip the documentation invocation and advance directly to the subsequent phase.
 
 ---
@@ -49,9 +49,9 @@ This rule set applies whenever the `agentic-coding-plugin` is active in an Antig
 
 ## 6. Question Relay Protocol & Interactive Gates
 - **Dual-Mode Orchestration**: `@coding` operates as a **Dual-Mode Orchestrator**:
-  - **Subagent Mode (`caller_id` present)**: When `@coding` runs under an upstream caller, it **MUST NOT** execute `ask_question` directly. It intercepts `[QUESTION_RELAY_REQUEST]` messages from worker subagents (`@coding-clarify`, `@coding-design`, `@coding-deploy`, `@coding-review`, `@coding-merge`) and forwards them upward to `caller_id` via `send_message`. Upon receiving `[QUESTION_RELAY_RESPONSE]` from `caller_id`, it forwards the response down to the child subagent.
+  - **Subagent Mode (`caller_id` present)**: When `@coding` runs under an upstream caller, it **MUST NOT** execute `ask_question` directly. It intercepts `[QUESTION_RELAY_REQUEST]` messages from worker subagents (`@coding-clarify`, `@coding-design`, `@coding-deploy`, `@coding-review`, `@coding-merge`, `@coding-document`) and forwards them upward to `caller_id` via `send_message`. Upon receiving `[QUESTION_RELAY_RESPONSE]` from `caller_id`, it forwards the response down to the child subagent.
   - **Standalone Mode (no `caller_id`)**: When `@coding` is invoked directly at the root session, it prompts the user directly via `ask_question` upon receiving `[QUESTION_RELAY_REQUEST]`, replying with `[QUESTION_RELAY_RESPONSE]\nAnswer: ...`.
-- **Question Delegation**: When running under `@coding` (caller ID present), worker subagents (`@coding-clarify`, `@coding-design`, `@coding-deploy`, `@coding-review`, `@coding-merge`) must not execute user-prompting tools (`ask_question`) directly.
+- **Question Delegation**: When running under `@coding` (caller ID present), worker subagents (`@coding-clarify`, `@coding-design`, `@coding-deploy`, `@coding-review`, `@coding-merge`, `@coding-document`) must not execute user-prompting tools (`ask_question`) directly.
 - **Contract Format**: Subagents must relay questions to the parent orchestrator using `send_message` with `[QUESTION_RELAY_REQUEST]\nQuestion: ...\nOptions: ...\nContext: ...`. The parent orchestrator prompts the user at the session root via `ask_question` and replies to the subagent with `[QUESTION_RELAY_RESPONSE]\nAnswer: ...`.
 - **Subagent Timeout Mitigation**: Relaying questions to the root orchestrator ensures prompt visibility in the main UI stream and mitigates subagent timeouts caused by deep nested interaction blocking.
 - **Standalone Fallback**: If a worker subagent is invoked as a standalone top-level agent without a caller ID, it falls back to calling `ask_question` directly.
@@ -76,6 +76,7 @@ This rule set applies whenever the `agentic-coding-plugin` is active in an Antig
 - **Isolated `.worktrees/<slug>` Lifecycle**:
   - `@coding-develop` creates or reuses an isolated Git worktree at `<repo_root>/.worktrees/<slug>` on `feature/<slug>`, `task/<slug>`, or `bugfix/<slug>`, ensures `.worktrees/` is ignored (via `.gitignore` or `.git/info/exclude`), performs all edits/tests/commits inside `<worktree_path>`, and reports `worktree_path` + `branch` in `DevelopReport`.
   - `@coding` propagates `worktree_path` to `@coding-deploy` (for local deployment and health probes), `@coding-review` (for `git status`/`git diff` and test/linter verification), and `@coding-merge` (for merging and cleanup via `git worktree remove` and `git worktree prune`).
+  - `@coding-merge` manages code repositories exclusively, while `@coding-document` self-manages `*-obsidian/` worktrees (`<vault_root>/.worktrees/<slug>` on `docs/<slug>`) and the `*-obsidian/` PR/merge and cleanup lifecycle.
 - **Exclusive `@coding-develop` Code-Change Authority**:
   - `@coding-develop` is the **sole** agent authorized to modify repository source code, configuration files, and test suites (`edit_file` is declared ONLY on `@coding-develop`).
   - On all other agents, `write_file` is restricted strictly to session artifacts (`<appDataDir>/brain/<conversation-id>/*.md`, or `*-obsidian/` for `@coding-document`), and `run_command` is non-mutating (read-only inspection, tests/linters, operational deployment/health commands, or git merge/branch/worktree lifecycle commands in `@coding-merge`).

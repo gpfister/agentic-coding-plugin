@@ -48,7 +48,7 @@ On startup and during each turn, inspect your execution context:
    - In Subagent Mode, you run within a managed background process subject to Antigravity runtime timeouts.
    - **Multi-Hop Relay Rules**:
      * **Artifact Approval Requests**: When receiving `[ARTIFACT_APPROVAL_REQUEST]` from a worker subagent (`@coding-specify`, `@coding-plan`, `@coding-deploy`), you **MUST NOT** call `write_file(RequestFeedback=True)` or create local metadata. Forward the `[ARTIFACT_APPROVAL_REQUEST]` envelope directly to `caller_id` via `send_message` and yield your turn immediately. Await `[ARTIFACT_APPROVAL_RESPONSE]` from `caller_id`, then forward it down to the child subagent.
-     * **Question Relay Requests**: When receiving `[QUESTION_RELAY_REQUEST]` from a worker subagent (`@coding-clarify`, `@coding-deploy`, `@coding-review`, `@coding-merge`), you **MUST NOT** call `ask_question` directly. Forward the `[QUESTION_RELAY_REQUEST]` envelope directly to `caller_id` via `send_message` and yield your turn immediately. Await `[QUESTION_RELAY_RESPONSE]` from `caller_id`, then forward it down to the child subagent.
+     * **Question Relay Requests**: When receiving `[QUESTION_RELAY_REQUEST]` from a worker subagent (`@coding-clarify`, `@coding-deploy`, `@coding-review`, `@coding-merge`, `@coding-document`), you **MUST NOT** call `ask_question` directly. Forward the `[QUESTION_RELAY_REQUEST]` envelope directly to `caller_id` via `send_message` and yield your turn immediately. Await `[QUESTION_RELAY_RESPONSE]` from `caller_id`, then forward it down to the child subagent.
 2. **Standalone Mode (no `caller_id`)**:
    - Detected when invoked directly at the root session without an upstream agent caller.
    - You run in the foreground session turn without background execution timeouts.
@@ -117,7 +117,7 @@ flowchart TD
     PlanGate -->|"Rejected"| PlanRejected["Forward [ARTIFACT_APPROVAL_RESPONSE: REJECTED]<br/>Route back to Phase 1"]
     PlanRejected --> P1
     PlanApproved --> DocPlanCheck{"agentic-project-documenting-plugin<br/>installed?"}
-    DocPlanCheck -->|"Yes"| InvokeDocPlan["Invoke @coding-document<br/>(Document architecture plan & ADRs)"]
+    DocPlanCheck -->|"Yes"| InvokeDocPlan["Invoke @coding-document<br/>(slug=&lt;slug&gt;, defer_pr=true: plan & ADRs)"]
     DocPlanCheck -->|"No"| P4["Phase 4: Development<br/>(@coding-develop)"]
     InvokeDocPlan --> P4
 
@@ -157,14 +157,14 @@ flowchart TD
     ReworkDev --> P6Review
     ReviewCheck -->|"Passed"| MergeConfirmGate{"Confirm Merge with User<br/>(Separate Final Gate)"}
     MergeConfirmGate -->|"User Confirmed"| DocPreMergeCheck{"agentic-project-documenting-plugin<br/>installed?"}
-    DocPreMergeCheck -->|"Yes"| InvokeDocPreMerge["Invoke @coding-document<br/>(Pre-merge tidy-up: update READMEs & architecture docs)"]
+    DocPreMergeCheck -->|"Yes"| InvokeDocPreMerge["Invoke @coding-document<br/>(slug=&lt;slug&gt;, defer_pr=true: pre-merge tidy-up)"]
     DocPreMergeCheck -->|"No"| P7Merge["Phase 7: Merge & Release<br/>(@coding-merge)"]
     InvokeDocPreMerge --> P7Merge
 
     %% Phase 7: Release & Merge
     P7Merge --> ExecMerge["Wait for all develop & deploy<br/>Execute merge/PR & complete cleanup/prune"]
     ExecMerge --> DocPostMergeCheck{"agentic-project-documenting-plugin<br/>installed?"}
-    DocPostMergeCheck -->|"Yes"| InvokeDocPostMerge["Invoke @coding-document<br/>(Post-merge: update git status, branch tracking & changelogs)"]
+    DocPostMergeCheck -->|"Yes"| InvokeDocPostMerge["Invoke @coding-document<br/>(slug=&lt;slug&gt;, defer_pr=false: git status, PR & cleanup)"]
     DocPostMergeCheck -->|"No"| Complete(["Workflow Completed"])
     InvokeDocPostMerge --> Complete
 
@@ -225,7 +225,7 @@ flowchart TD
   - **In Subagent Mode**: Forward `[ARTIFACT_APPROVAL_REQUEST]` to `caller_id` via `send_message`. Do NOT call `write_file(RequestFeedback=True)`. Halt turn immediately. Upon receiving `[ARTIFACT_APPROVAL_RESPONSE]` from `caller_id`, forward it to `coding-plan`.
   - **In Standalone Mode**: Present `plan.md` via `write_file(..., ArtifactMetadata={"RequestFeedback": True, "UserFacing": True})` as sole and final tool call of turn.
 - **Stage Advancement & Documentation**:
-  - On approval: if `agentic-project-documenting-plugin` is installed, invoke `@coding-document` to formalize ADRs and architecture plans, then advance to Stage 4 (`coding-develop`).
+  - On approval: if `agentic-project-documenting-plugin` is installed, invoke `@coding-document` with `slug=<slug>` and `defer_pr=true` to formalize ADRs and architecture plans in `<vault_root>/.worktrees/<slug>` (branch `docs/<slug>`) without opening a PR yet, then advance to Stage 4 (`coding-develop`).
   - On rejection: route user feedback back to Stage 1 (`coding-clarify`).
 
 ### Stage 4: Isolated Development (`coding-develop`)
@@ -279,7 +279,7 @@ flowchart TD
   - If quality defects or regressions are found: route back to `@coding-develop` or `coding-plan`.
   - Only after any unplanned changes are approved and all quality, test, linter, and deployment checks pass cleanly, proceed to the separate **Merge Confirmation Gate** (relaying `[QUESTION_RELAY_REQUEST]` to `caller_id` in Subagent Mode, or prompting via `ask_question` in Standalone Mode).
 - **Pre-Merge Documentation Gate**:
-  - Upon user merge confirmation, if `agentic-project-documenting-plugin` is installed, invoke `@coding-document` for pre-merge documentation tidy-up.
+  - Upon user merge confirmation, if `agentic-project-documenting-plugin` is installed, invoke `@coding-document` with the same `slug=<slug>` and `defer_pr=true` for pre-merge Obsidian vault tidy-up (committing incrementally to `docs/<slug>` without opening a PR yet).
 
 ### Stage 7: Release & Merge (`coding-merge`)
 - **Prerequisite**: `@coding-merge` strictly waits for all `coding-deploy` and all `coding-develop` to have run and completed successfully before initiating release merges or PR creation.
@@ -294,8 +294,10 @@ flowchart TD
 - **Execution & Complete Cleanup**:
   - **Local Release**: Merges `<branch>` into `<base>` in the primary repository working tree, verifies checkout on `<base>`, removes the isolated worktree (`git worktree remove <worktree_path>` + `git worktree prune`), and safely deletes local feature branch (`git branch -d <branch>`) when no remote exists.
   - **Remote Release**: Pushes feature branch, creates GitHub PR (or fallback compare URL), and handles waiting via Question Relay. Once merged, fast-forwards base branch (`git pull --ff-only origin <base>`), removes the isolated worktree (`git worktree remove <worktree_path>` + `git worktree prune`), deletes remote feature branch (`git push origin --delete <branch>`), safely removes local feature branch (`git branch -d <branch>`), prunes remote tracking references (`git fetch --prune origin`), and verifies primary repository remains on `<base>`.
+- **Repository Scope**:
+  - `@coding-merge` manages code repositories exclusively; `@coding-document` self-manages `*-obsidian/` worktree (`<vault_root>/.worktrees/<slug>` on `docs/<slug>`), PR, and cleanup.
 - **Post-Merge Documentation Gate**:
-  - When merge concludes, if `agentic-project-documenting-plugin` is installed, invoke `@coding-document` to update git status and changelogs.
+  - When merge concludes, if `agentic-project-documenting-plugin` is installed, invoke `@coding-document` with the same `slug=<slug>` and `defer_pr=false` to update git status and changelogs, commit, and execute `*-obsidian/` PR/merge and worktree cleanup. Any `[QUESTION_RELAY_REQUEST]` emitted by `@coding-document` (e.g., Hybrid PR Waiting Gate or `gh` fallback) is routed via Dual-Mode Question Relay (`send_message` to `caller_id` in Subagent Mode; `ask_question` in Standalone Mode).
 
 ---
 

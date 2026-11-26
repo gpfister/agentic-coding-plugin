@@ -155,7 +155,7 @@ flowchart TD
     PlanGate -->|"Rejected"| PlanRejected["Forward [ARTIFACT_APPROVAL_RESPONSE: REJECTED]<br/>Route back to Phase 1"]
     PlanRejected --> P1
     PlanApproved --> DocPlanCheck{"agentic-project-documenting-plugin<br/>installed?"}
-    DocPlanCheck -->|"Yes"| InvokeDocPlan["Invoke @coding-document<br/>(Document architecture plan & ADRs)"]
+    DocPlanCheck -->|"Yes"| InvokeDocPlan["Invoke @coding-document<br/>(slug=&lt;slug&gt;, defer_pr=true: plan & ADRs)"]
     DocPlanCheck -->|"No"| P4["Phase 4: Development<br/>(@coding-develop)"]
     InvokeDocPlan --> P4
 
@@ -195,14 +195,14 @@ flowchart TD
     ReworkDev --> P6Review
     ReviewCheck -->|"Passed"| MergeConfirmGate{"Confirm Merge with User<br/>(Separate Final Gate)"}
     MergeConfirmGate -->|"User Confirmed"| DocPreMergeCheck{"agentic-project-documenting-plugin<br/>installed?"}
-    DocPreMergeCheck -->|"Yes"| InvokeDocPreMerge["Invoke @coding-document<br/>(Pre-merge tidy-up: update READMEs & architecture docs)"]
+    DocPreMergeCheck -->|"Yes"| InvokeDocPreMerge["Invoke @coding-document<br/>(slug=&lt;slug&gt;, defer_pr=true: pre-merge tidy-up)"]
     DocPreMergeCheck -->|"No"| P7Merge["Phase 7: Merge & Release<br/>(@coding-merge)"]
     InvokeDocPreMerge --> P7Merge
 
     %% Phase 7: Release & Merge
     P7Merge --> ExecMerge["Wait for all develop & deploy<br/>Execute merge/PR & complete cleanup/prune"]
     ExecMerge --> DocPostMergeCheck{"agentic-project-documenting-plugin<br/>installed?"}
-    DocPostMergeCheck -->|"Yes"| InvokeDocPostMerge["Invoke @coding-document<br/>(Post-merge: update git status, branch tracking & changelogs)"]
+    DocPostMergeCheck -->|"Yes"| InvokeDocPostMerge["Invoke @coding-document<br/>(slug=&lt;slug&gt;, defer_pr=false: git status, PR & cleanup)"]
     DocPostMergeCheck -->|"No"| Complete(["Workflow Completed"])
     InvokeDocPostMerge --> Complete
 
@@ -237,7 +237,7 @@ flowchart TD
    - Produces `plan.md` on disk without `RequestFeedback=True` and dispatches `[ARTIFACT_APPROVAL_REQUEST]`.
    - In Subagent Mode, `@coding` forwards upward; in Standalone Mode, `@coding` presents interactive gate via `write_file(RequestFeedback=True)`.
    - Advances to `coding-develop` on approval (or routes to `coding-clarify` on rejection).
-   - **Post-Plan Approval Documentation**: If `agentic-project-documenting-plugin` is installed, invoke `@coding-document` after plan approval to document architecture plans, work breakdowns, and formalize ADRs.
+   - **Post-Plan Approval Documentation**: If `agentic-project-documenting-plugin` is installed, invoke `@coding-document` after plan approval with `slug=<slug>` and `defer_pr=true` to document architecture plans, work breakdowns, and formalize ADRs in `<vault_root>/.worktrees/<slug>` (branch `docs/<slug>`) without opening a PR yet.
 4. **`coding-develop`** (Exclusive Code-Change Authority):
    - Consumes `plan.md`, `specification.md`, and, when present, the approved `design-spec.md` and PenPot references for UI implementation.
    - Fanned out in parallel per repository (`coding-develop-<repo>`).
@@ -257,20 +257,21 @@ flowchart TD
    - **Review Artifact Forwarding Before Question**: After writing `review-<slug>.md`, `@coding-review` sends `[REVIEW_ARTIFACT]` (containing the `review-<slug>.md` path) to `@coding` **before** dispatching `[QUESTION_RELAY_REQUEST]`. In Subagent Mode, `@coding` forwards `[REVIEW_ARTIFACT]` to `caller_id` via `send_message` so the main agent can read it before the question arrives; in Standalone Mode, `@coding` presents/links `review-<slug>.md` to the user before calling `ask_question`.
    - **Unplanned Changes Validation Gate**: If unplanned changes (outside `plan.md`) are detected, prompts `"Do you approve the changes ?"` via `[QUESTION_RELAY_REQUEST]` (or `ask_question` in Standalone Mode). If the user selects `No, revert all these changes` or provides custom write-in revision instructions, returns a `ReviewReport` so `@coding` delegates the revert or revision to `@coding-develop` (and `@coding-deploy` if applicable), then re-runs `@coding-review` (overwriting/updating `review-<slug>.md`).
    - **Separate Merge Confirmation Gate**: Only after any unplanned changes are approved and all quality, test, linter, and deployment checks pass, requests merge confirmation directly or via `[QUESTION_RELAY_REQUEST]`. (If quality defects are found, loops back to `@coding-develop` or `coding-plan`.)
-   - **Pre-Merge Documentation (Tidy Up)**: If `agentic-project-documenting-plugin` is installed, invoke `@coding-document` prior to merging to tidy up project and feature documentation, architecture diagrams, and ADRs.
+   - **Pre-Merge Documentation (Tidy Up)**: If `agentic-project-documenting-plugin` is installed, invoke `@coding-document` prior to merging with the same `slug=<slug>` and `defer_pr=true` to tidy up project and feature documentation, architecture diagrams, and ADRs (committing incrementally to `docs/<slug>` without opening a PR yet).
 7. **`coding-merge`**:
    - Waits for all `coding-deploy` and all `coding-develop` to complete successfully.
    - **Local Release**: Merges `<branch>` into `<base>` in the primary repository working tree (`git checkout <base>` + `git merge <branch>`), verifies `<base>` checkout, removes the isolated worktree (`git worktree remove <worktree_path>` + `git worktree prune`), and safely deletes the local feature branch (`git branch -d <branch>`) when no remote exists.
    - **Remote Release**: Pushes branch (`git push -u origin <branch>`), checks `gh auth status`, and creates Pull Request (`gh pr create`). If `gh` is unauthenticated or missing, generates GitHub web compare URL (`https://github.com/<owner>/<repo>/compare/<base>...<branch>?expand=1`) and delegates instructions to `@coding` via Question Relay Protocol.
    - **Hybrid PR Waiting Gate**: Inspects PR status via `gh pr view <pr_number> --json state,reviewDecision,mergedAt,url`. To avoid Antigravity 60-second subagent timeouts, delegates waiting choices to the parent orchestrator via `[QUESTION_RELAY_REQUEST]` without blocking or sleeping in a loop.
    - **Post-Merge Base Synchronization & Complete Cleanup**: When PR is merged, ensures primary repo is on `<base>`, fast-forwards base branch (`git pull --ff-only origin <base>`), removes the isolated worktree (`git worktree remove <worktree_path>` + `git worktree prune`), deletes remote feature branch (`git push origin --delete <branch>`), safely removes local feature branch (`git branch -d <branch>`), prunes remote tracking references (`git fetch --prune origin`), and verifies primary repository remains on `<base>`.
-   - **Post-Merge Documentation (At the End)**: If `agentic-project-documenting-plugin` is installed, invoke `@coding-document` at the end to update git status, branch states, and changelogs in the Obsidian vault.
+   - **Repository Scope**: `@coding-merge` manages code repositories exclusively; `@coding-document` self-manages `*-obsidian/` worktree (`<vault_root>/.worktrees/<slug>` on `docs/<slug>`), PR, and cleanup.
+   - **Post-Merge Documentation (At the End)**: If `agentic-project-documenting-plugin` is installed, invoke `@coding-document` at the end with the same `slug=<slug>` and `defer_pr=false` to update git status, branch states, and changelogs in the Obsidian vault, commit, and execute `*-obsidian/` PR/merge and worktree cleanup.
 
 ---
 
 ## 6. Question Relay Protocol & Subagent Timeout Mitigation
 
-Worker subagents (`@coding-clarify`, `@coding-deploy`, `@coding-review`, `@coding-merge`) do not execute interactive user prompts directly when managed by `@coding`. Instead, they delegate interactive user queries to the parent orchestrator using structured message contracts:
+Worker subagents (`@coding-clarify`, `@coding-deploy`, `@coding-review`, `@coding-merge`, `@coding-document`) do not execute interactive user prompts directly when managed by `@coding`. Instead, they delegate interactive user queries to the parent orchestrator using structured message contracts:
 
 ### 1. Protocol Contracts
 - **Relay Request (`Subagent -> @coding`)**:
