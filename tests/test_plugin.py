@@ -623,4 +623,72 @@ def test_coding_document_worktree_defer_pr_and_question_relay():
     assert "@coding-document" in sec6, "@coding-document must be listed in rules/AGENTS.md Section 6"
 
 
+def test_ui_design_early_discovery_and_specification_resources():
+    """Verify FR-1 early @coding-design discovery and mandatory Design Resources in specification.md."""
+    clarify_content = (PLUGIN_ROOT / "agents" / "coding-clarify" / "agent.md").read_text(encoding="utf-8")
+    for token in ["DESIGN.md", "assets/", "docs/design/", "@coding-design", "Figma"]:
+        assert token in clarify_content, f"'{token}' missing in coding-clarify/agent.md"
+
+    specify_content = (PLUGIN_ROOT / "agents" / "coding-specify" / "agent.md").read_text(encoding="utf-8")
+    for token in ["Design Resources", "DESIGN.md", "assets/", "docs/design/", "Figma", "Non-UI"]:
+        assert token in specify_content, f"'{token}' missing in coding-specify/agent.md"
+
+    for file_path in [
+        PLUGIN_ROOT / "agents" / "coding" / "agent.md",
+        PLUGIN_ROOT / "skills" / "coding-orchestrator" / "SKILL.md",
+        PLUGIN_ROOT / "agents" / "agent.md",
+        PLUGIN_ROOT / "rules" / "AGENTS.md",
+    ]:
+        content = file_path.read_text(encoding="utf-8")
+        assert "Design Resources" in content, f"'Design Resources' missing in {file_path}"
+        assert "@coding-design" in content, f"'@coding-design' missing in {file_path}"
+        assert "early" in content.lower(), f"early discovery missing in {file_path}"
+
+
+def test_ui_design_local_resource_sync_and_component_reuse():
+    """Verify FR-3 local resource sync (DESIGN.md, assets/, docs/design/) and FR-5 component reuse + fallback."""
+    for file_path in [
+        PLUGIN_ROOT / "agents" / "coding-plan" / "agent.md",
+        PLUGIN_ROOT / "agents" / "coding-develop" / "agent.md",
+        PLUGIN_ROOT / "rules" / "AGENTS.md",
+    ]:
+        content = file_path.read_text(encoding="utf-8")
+        assert "DESIGN.md" in content, f"'DESIGN.md' missing in {file_path}"
+        assert "assets/" in content, f"'assets/' missing in {file_path}"
+        assert "docs/design/" in content, f"'docs/design/' missing in {file_path}"
+        assert "component reuse" in content.lower(), f"'component reuse' missing in {file_path}"
+        assert "Figma" in content, f"'Figma' fallback missing in {file_path}"
+        assert "agentic-design-plugin" in content, f"'agentic-design-plugin' fallback missing in {file_path}"
+
+
+def test_coding_review_offline_design_compliance_without_mcp():
+    """Verify FR-4/FR-5: coding-review has no MCP tools, audits local design resources & reuse, and blocks merge on drift."""
+    review_md = PLUGIN_ROOT / "agents" / "coding-review" / "agent.md"
+    meta = parse_frontmatter(review_md)
+    assert meta.get("enable_mcp_tools") in (None, False), "coding-review must NOT enable MCP tools"
+    tools = meta.get("tools", [])
+    assert not any("mcp" in t.lower() or "penpot" in t.lower() for t in tools), (
+        f"coding-review must not declare MCP tools, got {tools}"
+    )
+
+    content = review_md.read_text(encoding="utf-8")
+    for token in [
+        "Design Compliance & Local Resource Sync",
+        "DESIGN.md",
+        "assets/",
+        "docs/design/",
+        "block merge",
+        "Component Reuse",
+        "Figma",
+        "agentic-design-plugin",
+    ]:
+        assert token in content, f"'{token}' missing in coding-review/agent.md"
+
+    catalog_content = (PLUGIN_ROOT / "agents" / "agent.md").read_text(encoding="utf-8")
+    review_row = [line for line in catalog_content.splitlines() if "**`@coding-review`**" in line]
+    assert len(review_row) == 1, "Expected @coding-review row in agents/agent.md"
+    assert "| `False` |" in review_row[0], "agents/agent.md must list @coding-review enable_mcp_tools as False"
+
+
+
 

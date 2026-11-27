@@ -51,7 +51,7 @@ Subagents are discovered dynamically and registered via `define_subagent` (or `d
 | **`@coding-plan`** | [`agents/coding-plan/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-plan/) | `True` | `False` | `True` | `write_file`, `read_file`, `list_dir`, `run_command`, `send_message` | Multi-repo task breakdown, deployment assessment, & branch planning |
 | **`@coding-develop`** | [`agents/coding-develop/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-develop/) | `True` | `False` | `True` | `read_file`, `write_file`, `edit_file`, `list_dir`, `run_command`, `search_web` | **Exclusive code-change authority**: isolated `.worktrees/<slug>` repo implementation, tests, linting, docs, and fix remediation |
 | **`@coding-deploy`** | [`agents/coding-deploy/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-deploy/) | `True` | `True` | `True` | `run_command`, `read_file`, `list_dir`, `write_file` (strictly `deployment-issue*.md`), `ask_question`, `send_message`, `invoke_subagent` | Local deployment execution targeting `worktree_path`, health monitoring, error investigation & fix orchestration |
-| **`@coding-review`** | [`agents/coding-review/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-review/) | `True` | `False` | `True` | `read_file`, `write_file` (strictly `review-<slug>.md` artifacts), `list_dir`, `run_command`, `ask_question`, `send_message` | Plan-vs-Changes git audit, `review-<slug>.md` generation, deliverables & deployment verification against specification, unplanned changes & merge confirmation relay |
+| **`@coding-review`** | [`agents/coding-review/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-review/) | `True` | `False` | `False` | `read_file`, `write_file` (strictly `review-<slug>.md` artifacts), `list_dir`, `run_command`, `ask_question`, `send_message` | Plan-vs-Changes git audit, offline design compliance (`DESIGN.md`, `assets/`, `docs/design/`, component reuse), `review-<slug>.md` generation, deliverables & deployment verification against specification, unplanned changes & merge confirmation relay |
 | **`@coding-merge`** | [`agents/coding-merge/`](file:///Users/gpfister/Development/Projects/gpfister/agentic/agentic-coding-plugin/agents/coding-merge/) | `True` | `False` | `True` | `run_command`, `read_file`, `list_dir`, `ask_question`, `send_message` | Local branch merge with base checkout and branch cleanup, or remote Pull Request creation with Question Relay waiting gate, base branch synchronization, remote branch deletion, and remote tracking reference pruning |
 
 ### 1.3 Dual-Mode Orchestration & Anti-Direct-Coding Boundaries
@@ -94,20 +94,21 @@ coding-clarify ──> coding-specify ──> coding-plan ──> coding-develop
   - Never ask open-ended or bundled batches of questions. Always ask **one question at a time**.
   - **Question Relay Protocol**: When running under `@coding` (caller ID present), send questions to `@coding` using `[QUESTION_RELAY_REQUEST]`. `@coding` prompts the user via `ask_question` and replies with `[QUESTION_RELAY_RESPONSE]`. Standalone invocations fall back to direct `ask_question`.
   - For each question provide: why the decision matters, concrete options, a recommended option prefixed with `(Recommended)`, and the technical rationale.
-  - **Inspect First Rule**: Check existing codebase files before asking questions that can be answered from inspection.
+  - **Inspect First Rule**: Check existing codebase files (including `DESIGN.md`, `docs/design/*.penpot`, and `assets/` for UI applications) before asking questions that can be answered from inspection.
+  - **Early UI Design Discovery**: For UI applications, clarify PenPot or external design references (e.g., Figma); when `agentic-design-plugin` is installed, `@coding` invokes `@coding-design` in early discovery/creation mode during Phase 1/2 before `specification.md` is finalized.
 - **Handoff**: Concludes with structured `ClarificationSummary` JSON transferred back to `@coding` to transition to `coding-specify`.
 
 ### Stage 2: Specification (`coding-specify`)
 - **Objective**: Author a comprehensive, verifiable technical specification document (`specification.md`).
-- **Contents**: Problem motivation, functional requirements, non-functional requirements, affected repositories, test contracts, and edge-case mitigations.
+- **Contents**: Problem motivation, functional requirements, non-functional requirements, affected repositories, **`## Design Resources`** (PenPot file/page/versioned screen IDs, external Figma/other links, and local `DESIGN.md` / `assets/` / `docs/design/<resource>.penpot`, or `N/A — Non-UI task`), test contracts, and edge-case mitigations.
 - **Artifact Approval Relay Gate**:
   - `coding-specify` writes `specification.md` to disk without `RequestFeedback=True`.
   - Dispatches `[ARTIFACT_APPROVAL_REQUEST]` to `@coding` and awaits `[ARTIFACT_APPROVAL_RESPONSE]`.
   - In Subagent Mode, `@coding` forwards `[ARTIFACT_APPROVAL_REQUEST]` directly to `caller_id` via `send_message`. In Standalone Mode, `@coding` presents the interactive modal to the user using `write_file(..., ArtifactMetadata={"RequestFeedback": True, "UserFacing": True})` as its sole tool call of that turn, avoiding subagent timeouts.
-  - `@coding` advances to Stage 3 (`coding-plan`) upon receiving approval (or routes to `coding-clarify` on rejection).
+  - `@coding` advances to `DesignCheck` / Stage 3 (`coding-plan`) upon receiving approval (or routes to `coding-clarify` on rejection). When BOTH `agentic-design-plugin` is installed AND the task has UI/UX scope, `@coding-design` authors `design-spec.md` (with PenPot semantic versioning, component reuse audit, and local resource sync targets) strictly between `coding-specify` and `coding-plan`; otherwise, fallback carries `Design Resources` from `specification.md` directly to `coding-plan`.
 
 ### Stage 3: Planning (`coding-plan`)
-- **Objective**: Deconstruct the approved specification into atomic, verifiable steps, assess local deployment requirements, and determine git branch names (`plan.md`).
+- **Objective**: Deconstruct the approved specification (and `design-spec.md` when present) into atomic, verifiable steps, schedule local design resource sync (`DESIGN.md`, `assets/`, `docs/design/<resource>.penpot`) and shared component reuse mapping, assess local deployment requirements, and determine git branch names (`plan.md`).
 - **Local Deployment Assessment**:
   - `coding-plan` inspects each target repository for local deployment mechanisms (Docker, docker-compose, scripts/deployment_local.sh, terraform/local, Minikube/Kubernetes manifests).
   - Explicitly adds local deployment tasks for repositories requiring them.
@@ -121,7 +122,7 @@ coding-clarify ──> coding-specify ──> coding-plan ──> coding-develop
   - `@coding` advances to Stage 4 (`coding-develop`) upon receiving approval (or routes to `coding-clarify` on rejection).
 
 ### Stage 4: Development (`coding-develop`)
-- **Objective**: Implement required code changes, tests, linters, documentation, and CI/CD updates.
+- **Objective**: Implement required code changes, modular reusable UI components, scheduled local design resources (`DESIGN.md`, `assets/`, `docs/design/<resource>.penpot`), tests, linters, documentation, and CI/CD updates inside `<worktree_path>`.
 - **Parallel Fan-Out**: When multiple repositories are affected, `@coding` spawns independent `coding-develop` workers per repo in parallel (`coding-develop-<repo>`).
 - **Quality Mandates**:
   - Run all unit and integration tests; verify 100% clean passes.
@@ -145,10 +146,10 @@ coding-clarify ──> coding-specify ──> coding-plan ──> coding-develop
 - **Handoff**: Concludes with structured `DeployReport` JSON.
 
 ### Stage 6: Review (`coding-review`)
-- **Objective**: Audit actual repository changes (`git status` / `git diff`) against the approved `plan.md`, validate all deliverables against `specification.md`, verify cross-repo contract compatibility, and confirm that all required local deployments succeeded.
+- **Objective**: Audit actual repository changes (`git status` / `git diff`) against the approved `plan.md`, validate all deliverables against `specification.md` (and `design-spec.md` when present), verify offline UI design compliance (`DESIGN.md`, `assets/`, `docs/design/<resource>.penpot`, and component reuse without MCP tools), verify cross-repo contract compatibility, and confirm that all required local deployments succeeded.
 - **Handoff & Review Artifact (`review-<slug>.md`)**:
-  - `@coding` passes the approved `plan.md` path alongside `specification.md`, `DevelopReport`s, and `DeployReport`s to `coding-review`.
-  - On every run, `coding-review` writes `<appDataDir>/brain/<conversation-id>/review-<slug>.md` without `RequestFeedback=True` and without `[ARTIFACT_APPROVAL_REQUEST]` (reporting `"None"` when no unplanned changes exist).
+  - `@coding` passes the approved `plan.md` path alongside `specification.md`, `design-spec.md` (when present), `DevelopReport`s, and `DeployReport`s to `coding-review`.
+  - On every run, `coding-review` writes `<appDataDir>/brain/<conversation-id>/review-<slug>.md` (including **`Design Compliance & Local Resource Sync`** for UI apps, blocking merge on UI drift, component reuse violations, or missing local resource updates) without `RequestFeedback=True` and without `[ARTIFACT_APPROVAL_REQUEST]` (reporting `"None"` when no unplanned changes exist).
 - **Unplanned Changes Validation Gate & Discrepancy Routing**:
   - If unplanned changes (outside `plan.md`) are detected, `coding-review` triggers the Unplanned Changes Validation Gate (`"Do you approve the changes ?"`) via `[QUESTION_RELAY_REQUEST]` (or `ask_question` in Standalone Mode).
   - If the user selects `No, revert all these changes` or provides custom write-in revision instructions, `coding-review` returns a `ReviewReport` so `@coding` routes the revert or revision to `@coding-develop` (and `@coding-deploy` if applicable), followed by a fresh `@coding-review` pass.
@@ -189,6 +190,9 @@ For interactive requirements interrogation, backlog grooming, scope boundary cla
 
 ### 3.6 Dynamic Prompt Triage
 For fast non-autoregressive prompt classification and intent routing across installed plugins, use the companion plugin **`agentic-prompt-triage-plugin`**.
+
+### 3.7 UI/UX Design & PenPot Authoring (`@coding-design`)
+For UI/UX design discovery, non-destructive PenPot versioning, reusable component specification, and `design-spec.md` synthesis, use the companion plugin **`agentic-design-plugin`** (`@coding-design`). When absent or when Figma/other external design tools are used, `@coding` falls back to tracking design references and `DESIGN.md` / `assets/` / `docs/design/` through `specification.md`, `plan.md`, `coding-develop`, and `coding-review`.
 
 ---
 

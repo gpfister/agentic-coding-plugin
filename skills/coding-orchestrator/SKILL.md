@@ -114,7 +114,10 @@ flowchart TD
     RelayQUp --> AwaitQResp["Await [QUESTION_RELAY_RESPONSE]<br/>forward down to subagent"]
     AskDirect --> P1
     AwaitQResp --> P1
-    AmbiguityCheck -->|"No / Clarified"| P2
+    AmbiguityCheck -->|"No / Clarified"| EarlyDesignCheck{"UI app &<br/>agentic-design-plugin<br/>installed?"}
+    EarlyDesignCheck -->|"Yes"| EarlyDesign["Early @coding-design<br/>(Discover/create PenPot resources)"]
+    EarlyDesignCheck -->|"No / Fallback"| P2
+    EarlyDesign --> P2
 
     %% Phase 2: Specification
     P2 --> SpecSubagent["Write specification.md to disk<br/>Relay [ARTIFACT_APPROVAL_REQUEST]"]
@@ -218,20 +221,21 @@ flowchart TD
 1. **`coding-clarify`**:
    - Conducts a Matt Pocock `/grill-me` style interview, asking strictly one question at a time.
    - Delegates questions using Question Relay Protocol (`[QUESTION_RELAY_REQUEST]`). In Subagent Mode, `@coding` forwards upward to `caller_id`; in Standalone Mode, `@coding` prompts user directly.
+   - For UI applications, inspects existing local design files (`DESIGN.md`, `docs/design/*.penpot`, `assets/`) and clarifies PenPot/external design references; when `agentic-design-plugin` is installed, `@coding` invokes `@coding-design` in early discovery/creation mode during Phase 1/2 so PenPot resources are located or initialized before `specification.md` is finalized.
    - Advances directly to `coding-specify` once all ambiguities are resolved.
 2. **`coding-specify`**:
-   - Synthesizes findings into `specification.md` and writes it to disk without `RequestFeedback=True`.
+   - Synthesizes findings into `specification.md` (including a mandatory `## Design Resources` section for UI apps, or `N/A — Non-UI task`, with fallback tracking for Figma/external design tools when `agentic-design-plugin` is absent) and writes it to disk without `RequestFeedback=True`.
    - Dispatches `[ARTIFACT_APPROVAL_REQUEST]`. In Subagent Mode, `@coding` forwards upward; in Standalone Mode, `@coding` presents interactive gate via `write_file(RequestFeedback=True)` as sole tool call of turn.
    - On approval, routes to `DesignCheck` (or advances directly to `coding-plan` if `DesignCheck` is skipped); on rejection, routes back to `coding-clarify`.
    - **UI/UX Design (`@coding-design`, strictly between `coding-specify` and `coding-plan`)**:
-     - **Dual-Condition Trigger (`DesignCheck`)**: Invoke `@coding-design` **only when BOTH** `agentic-design-plugin` is installed **AND** the task involves UI/UX changes (wireframes, mockups, layouts, frontend components, design tokens, or PenPot inspections). Otherwise, gracefully skip `@coding-design` and advance directly to `coding-plan`.
+     - **Dual-Condition Trigger (`DesignCheck`)**: Invoke `@coding-design` **only when BOTH** `agentic-design-plugin` is installed **AND** the task involves UI/UX changes (wireframes, mockups, layouts, frontend components, design tokens, or PenPot inspections). Otherwise (non-UI task, or fallback when `agentic-design-plugin` is absent or Figma/other external tools are used), gracefully skip `@coding-design` and advance directly to `coding-plan` while carrying `Design Resources` from `specification.md`.
      - **Dual-Mode Relays**: Forward any `[QUESTION_RELAY_REQUEST]` and `[ARTIFACT_APPROVAL_REQUEST]` for `design-spec.md` upward to `caller_id` in Subagent Mode, or present `write_file(RequestFeedback=True)` as the sole tool call of the turn in Standalone Mode.
      - **Design Change-Request Loop**: On `design-spec.md` rejection (`status: "REJECTED"`), evaluate the user's feedback against `specification.md`:
        - **Branch A — Functional, Scope, Requirement, or User-Flow Changes (including mixed feedback)**: Route to `@coding-specify` with the rejection feedback and current `specification.md` to update `specification.md`, followed by its `[ARTIFACT_APPROVAL_REQUEST]` gate (if approved, re-invoke `@coding-design`; if rejected, follow `SpecRejected` -> `coding-clarify`).
        - **Branch B — Purely Visual, Layout, or Styling Feedback (within existing `specification.md`)**: Re-invoke `@coding-design` directly with the rejection feedback to update PenPot designs and `design-spec.md`, then re-present the `[ARTIFACT_APPROVAL_REQUEST]` gate.
-     - **Downstream Handoff**: Upon `design-spec.md` approval (or when already approved in Pre-Clarified Fast-Path), pass the approved `design-spec.md` path and PenPot references to both `@coding-plan` and `@coding-develop`.
+     - **Downstream Handoff**: Upon `design-spec.md` approval (or when already approved in Pre-Clarified Fast-Path), pass the approved `design-spec.md` path, `Design Resources`, local resource sync targets (`DESIGN.md`, `assets/`, `docs/design/<resource>.penpot`), and component reuse requirements to `@coding-plan`, `@coding-develop`, and `@coding-review`.
 3. **`coding-plan`**:
-   - Consumes `specification.md` and, when present, the approved `design-spec.md` and PenPot references for task decomposition and component planning.
+   - Consumes `specification.md` (including `## Design Resources`) and, when present, the approved `design-spec.md` and PenPot references for task decomposition, scheduling `DESIGN.md`, `assets/`, and `docs/design/<resource>.penpot` updates, and shared component reuse mapping (with fallback when `agentic-design-plugin` is absent or Figma/other external tools are used).
    - Decomposes work per repository and determines branch names (`feature/*`, `task/*`, `bugfix/*`).
    - Assesses if local deployment is required for each repository (Docker, Docker Compose, Terraform to local Kubernetes/Minikube, scripts).
    - Produces `plan.md` on disk without `RequestFeedback=True` and dispatches `[ARTIFACT_APPROVAL_REQUEST]`.
@@ -239,7 +243,7 @@ flowchart TD
    - Advances to `coding-develop` on approval (or routes to `coding-clarify` on rejection).
    - **Post-Plan Approval Documentation**: If `agentic-project-documenting-plugin` is installed, invoke `@coding-document` after plan approval with `slug=<slug>` and `defer_pr=true` to document architecture plans, work breakdowns, and formalize ADRs in `<vault_root>/.worktrees/<slug>` (branch `docs/<slug>`) without opening a PR yet.
 4. **`coding-develop`** (Exclusive Code-Change Authority):
-   - Consumes `plan.md`, `specification.md`, and, when present, the approved `design-spec.md` and PenPot references for UI implementation.
+   - Consumes `plan.md`, `specification.md` (`## Design Resources`), and, when present, the approved `design-spec.md` and PenPot references for UI implementation, enforcing component reuse and writing/committing scheduled `DESIGN.md`, `assets/`, and `docs/design/<resource>.penpot` updates inside `<worktree_path>`.
    - Fanned out in parallel per repository (`coding-develop-<repo>`).
    - Keeps the primary repository working tree on `main`/`master` and creates/reuses an isolated Git worktree at `<repo_root>/.worktrees/<slug>` on `feature/<slug>`, `task/<slug>`, or `bugfix/<slug>` (ensuring `.worktrees/` is ignored).
    - **Sole agent** authorized to modify repository source code, configs, and tests (`edit_file` is declared exclusively on `coding-develop`).
@@ -252,8 +256,8 @@ flowchart TD
    - If approved with multiple options, relays question to the user via `[QUESTION_RELAY_REQUEST]`.
    - Invokes `coding-develop` to implement the approved fix inside `worktree_path`, then re-deploys and monitors.
 6. **`coding-review`**:
-   - Receives `specification.md`, the approved `plan.md` path, and all `DevelopReport` (including `worktree_path` and `branch`) and `DeployReport` outputs from `@coding`.
-   - Inspects actual `git status` / `git diff` inside each `worktree_path` against `plan.md`, confirms cross-repo consistency, spec compliance, tests/linters inside `worktree_path`, and local deployment health, and writes `<appDataDir>/brain/<conversation-id>/review-<slug>.md` (without `RequestFeedback=True` or `[ARTIFACT_APPROVAL_REQUEST]`).
+   - Receives `specification.md` (including `## Design Resources`), `design-spec.md` (when present), the approved `plan.md` path, and all `DevelopReport` (including `worktree_path` and `branch`) and `DeployReport` outputs from `@coding`.
+   - Operates strictly offline without MCP tools and inspects actual `git status` / `git diff` inside each `worktree_path` against `plan.md`, confirms cross-repo consistency, spec compliance, UI design compliance (`DESIGN.md`, `assets/`, `docs/design/<resource>.penpot`, and component reuse, with fallback when `agentic-design-plugin` is absent or Figma/external tools are used), tests/linters inside `worktree_path`, and local deployment health, and writes `<appDataDir>/brain/<conversation-id>/review-<slug>.md` (including `Design Compliance & Local Resource Sync` for UI apps, without `RequestFeedback=True` or `[ARTIFACT_APPROVAL_REQUEST]`).
    - **Review Artifact Forwarding Before Question**: After writing `review-<slug>.md`, `@coding-review` sends `[REVIEW_ARTIFACT]` (containing the `review-<slug>.md` path) to `@coding` **before** dispatching `[QUESTION_RELAY_REQUEST]`. In Subagent Mode, `@coding` forwards `[REVIEW_ARTIFACT]` to `caller_id` via `send_message` so the main agent can read it before the question arrives; in Standalone Mode, `@coding` presents/links `review-<slug>.md` to the user before calling `ask_question`.
    - **Unplanned Changes Validation Gate**: If unplanned changes (outside `plan.md`) are detected, prompts `"Do you approve the changes ?"` via `[QUESTION_RELAY_REQUEST]` (or `ask_question` in Standalone Mode). If the user selects `No, revert all these changes` or provides custom write-in revision instructions, returns a `ReviewReport` so `@coding` delegates the revert or revision to `@coding-develop` (and `@coding-deploy` if applicable), then re-runs `@coding-review` (overwriting/updating `review-<slug>.md`).
    - **Separate Merge Confirmation Gate**: Only after any unplanned changes are approved and all quality, test, linter, and deployment checks pass, requests merge confirmation directly or via `[QUESTION_RELAY_REQUEST]`. (If quality defects are found, loops back to `@coding-develop` or `coding-plan`.)

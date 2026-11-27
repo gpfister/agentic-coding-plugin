@@ -26,6 +26,9 @@ You receive clarified requirements and synthesize them into an unambiguous, veri
    - Functional requirements.
    - Non-functional requirements (latency, concurrency, safety).
    - Affected repositories.
+   - **`## Design Resources`** (mandatory section for all specifications):
+     * For UI applications: record PenPot file/page/versioned screen IDs (discovered or initialized via early `@coding-design` when `agentic-design-plugin` is installed), external design links (Figma or other tools when used), and local repository design files (`DESIGN.md`, `assets/`, `docs/design/<resource>.penpot`). Apply this same `Design Resources` tracking as fallback even when `agentic-design-plugin` is not installed.
+     * For non-UI tasks (backend, CLI, library): explicitly record `N/A — Non-UI task`.
    - Edge cases & mitigations.
    - Verifiable acceptance criteria.
 3. **Artifact Creation & Approval Relay**:
