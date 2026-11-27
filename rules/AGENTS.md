@@ -81,3 +81,23 @@ This rule set applies whenever the `agentic-coding-plugin` is active in an Antig
   - `@coding-develop` is the **sole** agent authorized to modify repository source code, configuration files, and test suites (`edit_file` is declared ONLY on `@coding-develop`).
   - On all other agents, `write_file` is restricted strictly to session artifacts (`<appDataDir>/brain/<conversation-id>/*.md`, or `*-obsidian/` for `@coding-document`), and `run_command` is non-mutating (read-only inspection, tests/linters, operational deployment/health commands, or git merge/branch/worktree lifecycle commands in `@coding-merge`).
 
+---
+
+## 9. UI/UX Design Lifecycle, Component Reuse & Local Resource Sync
+- **Early Design Discovery & `Design Resources` (`FR-1`)**:
+  - For all UI applications (web, mobile, desktop, etc.), `@coding` invokes `@coding-design` during Phase 1 (`@coding-clarify`) / Phase 2 (`@coding-specify`) whenever `agentic-design-plugin` is installed to discover existing or initialize new PenPot resources before `specification.md` is finalized.
+  - `@coding-clarify` inspects the workspace for existing local design files (`DESIGN.md`, `docs/design/*.penpot`, `assets/`) and clarifies PenPot or external design references.
+  - `@coding-specify` MUST include a `## Design Resources` section in `specification.md` recording PenPot file/page/versioned screen IDs, external design links (e.g., Figma), and local design files (`DESIGN.md`, `assets/`, `docs/design/<resource>.penpot`), or `N/A — Non-UI task` for non-UI tasks.
+- **Local Repository Design Resource Sync (`FR-3`)**:
+  - `@coding-design` remains strictly read-only on repository files and specifies all required `DESIGN.md`, `assets/`, and `docs/design/<resource>.penpot` updates in `design-spec.md`.
+  - `@coding-plan` schedules explicit tasks in `plan.md` to create/update `DESIGN.md`, `assets/`, and `docs/design/<resource>.penpot`.
+  - `@coding-develop` writes and commits `DESIGN.md`, `assets/`, and `docs/design/<resource>.penpot` inside `<repo_root>/.worktrees/<slug>` (using PenPot export API/CLI or user-assisted export fallback when automated `.penpot` export is unavailable).
+- **Offline Design Compliance Audit (`FR-4`)**:
+  - `@coding-review` MUST NOT declare `enable_mcp_tools: true` or any MCP tools.
+  - Inside `worktree_path`, `@coding-review` audits `git diff`, `DESIGN.md`, `assets/`, and `docs/design/<resource>.penpot` against `design-spec.md` and `specification.md`, and includes a mandatory `Design Compliance & Local Resource Sync` section in `review-<slug>.md`.
+  - Any UI drift or missing/out-of-sync local design resource updates MUST block merge and route remediation back to `@coding-develop` (or `@coding-plan`).
+- **Cross-Stage Component Reuse & UI-App Fallback (`FR-5`)**:
+  - All 4 stages (`@coding-design`, `@coding-plan`, `@coding-develop`, `@coding-review`) enforce UI component reuse (defining reusable components, mapping shared primitives, extracting modular components without duplication, and auditing `git diff` for reuse compliance).
+  - When `agentic-design-plugin` is not installed or Figma/other external design tools are used, `specification.md` (`Design Resources`), `plan.md`, `@coding-develop`, and `review-<slug>.md` (`Design Compliance & Local Resource Sync`) still track design references, `DESIGN.md`, `assets/`, and `docs/design/`.
+
+

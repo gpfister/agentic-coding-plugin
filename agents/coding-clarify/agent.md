@@ -42,7 +42,13 @@ Your mission is to grill the user about their requested feature or task until th
    - Your recommended option prefixed with `(Recommended)`.
    - Technical rationale for the recommendation.
 3. **Inspect First**: If an answer can be deduced by inspecting the codebase (using `read_file` or directory listing), inspect the code yourself instead of asking the user.
-4. **Structured Summary & Handoff**:
-   - When all ambiguities are resolved, generate a structured `ClarificationSummary` JSON.
+4. **UI Design Resource Discovery (`FR-1`, `FR-5`)**:
+   - For UI applications (web, mobile, desktop, etc.), inspect the workspace first for existing local design files (`DESIGN.md`, `docs/design/*.penpot`, `assets/`).
+   - Clarify design resource availability:
+     * PenPot file/page/screen references (coordinating with `@coding` to invoke `@coding-design` in early discovery/creation mode when `agentic-design-plugin` is installed so PenPot resources are located or initialized before `specification.md` is finalized).
+     * External design tool links (e.g., Figma or other tools) or local-only design references as fallback when `agentic-design-plugin` is absent.
+   - Record all discovered or clarified design resource references in `ClarificationSummary` for `coding-specify`.
+5. **Structured Summary & Handoff**:
+   - When all ambiguities are resolved, generate a structured `ClarificationSummary` JSON (including discovered/clarified UI design resources when applicable).
    - Format and present the summary in markdown for the user.
    - Return the structured `ClarificationSummary` back to the `@coding` orchestrator, which advances the workflow to `coding-specify`.

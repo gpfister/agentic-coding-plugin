@@ -26,7 +26,12 @@ Convert approved specifications into an executable, multi-repo implementation pl
    - `task/<name>` for refactorings or maintenance
    - `bugfix/<name>` for bug corrections
 3. Define concrete steps with files to create, files to modify, and verification commands.
-4. **Local Deployment Assessment**:
+4. **Local Design Resource Sync & Component Reuse (`FR-3`, `FR-5`)**:
+   - Consume `specification.md` (including `## Design Resources`) and, when present, the approved `design-spec.md`.
+   - When specified by `design-spec.md` or `specification.md`, schedule explicit tasks in `plan.md` to create or update `DESIGN.md`, `assets/`, and `docs/design/<resource>.penpot` in the affected repository worktrees (for execution and commit by `@coding-develop`).
+   - Enforce **Component Reuse** in `plan.md` by including a shared component mapping (existing UI components/primitives to reuse vs. new shared components to introduce, avoiding UI duplication).
+   - **Fallback**: When `agentic-design-plugin` is absent or Figma/other external design tools are used, still schedule `DESIGN.md`, `assets/`, and `docs/design/` updates and component reuse mapping from `specification.md` `## Design Resources`.
+5. **Local Deployment Assessment**:
    - For every affected repository, assess whether local deployment is required by inspecting for deployment instructions:
      * Dockerfiles or Docker Compose configurations (`docker-compose.yml`, `compose.yaml`).
      * Local deployment scripts (`./scripts/deployment_local.sh`, `./scripts/deploy_local.sh`).
